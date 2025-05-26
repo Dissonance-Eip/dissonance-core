@@ -29,8 +29,7 @@ jobs:
         run: |
           cppcheck --enable=all --inconclusive --std=c++17 --force \
           --suppress=missingIncludeSystem \
-          --project=build/compile_commands.json \
-          include src tests
+          --project=build/compile_commands.json
 
       - name: Build and test
         run: |
