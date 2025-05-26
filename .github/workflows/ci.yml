@@ -19,6 +19,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake g++ libgtest-dev cppcheck
 
+      - name: Configure build directory
+        run: |
+          mkdir -p build
+          cd build
+          cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+
       - name: Run Cppcheck
         run: |
           cppcheck --enable=all --inconclusive --std=c++17 --force \
@@ -28,8 +34,6 @@ jobs:
 
       - name: Build and test
         run: |
-          mkdir -p build
           cd build
-          cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
           make
           ctest --output-on-failure
