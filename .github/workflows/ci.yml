@@ -17,12 +17,22 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ libgtest-dev
+          sudo apt-get install -y cmake g++ libgtest-dev cppcheck
 
-      - name: Build and test
+      - name: Configure build directory
         run: |
           mkdir -p build
           cd build
-          cmake ..
+          cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
+
+      - name: Run Cppcheck
+        run: |
+          cppcheck --enable=all --inconclusive --std=c++17 --force \
+          --suppress=missingIncludeSystem \
+          --project=build/compile_commands.json
+
+      - name: Build and test
+        run: |
+          cd build
           make
           ctest --output-on-failure

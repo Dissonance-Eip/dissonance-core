@@ -13,7 +13,7 @@ class Parser {
 public:
     Parser() = default;
 
-    void readFromFile(std::ifstream& file) {
+        void readFromFile(std::ifstream& file) {
         if (!file.is_open()) {
             throw std::runtime_error("File not open");
         }
@@ -32,11 +32,11 @@ public:
 
         while (true) {
             readString(file, data, 4);
-            uint32_t chunkSize;
-            readData(file, chunkSize);
+            uint32_t localChunkSize;
+            readData(file, localChunkSize);
 
             if (data == "data") {
-                subchunk2Size = chunkSize;
+                subchunk2Size = localChunkSize;
                 audioData.resize(subchunk2Size);
 
                 if (bitsPerSample == 16) {
@@ -49,14 +49,14 @@ public:
                 break;
             }
             if (data == "LIST") {
-                std::vector<char> chunkData(chunkSize);
-                if (!file.read(chunkData.data(), chunkSize)) {
+                std::vector<char> chunkData(localChunkSize);
+                if (!file.read(chunkData.data(), localChunkSize)) {
                     throw std::runtime_error("Failed to read LIST chunk data");
                 }
                 otherChunks[data] = std::move(chunkData);
             } else {
-                std::vector<char> chunkData(chunkSize);
-                if (!file.read(chunkData.data(), chunkSize)) {
+                std::vector<char> chunkData(localChunkSize);
+                if (!file.read(chunkData.data(), localChunkSize)) {
                     throw std::runtime_error("Failed to read chunk data");
                 }
                 otherChunks[data] = std::move(chunkData);
@@ -65,10 +65,10 @@ public:
     }
 
     // Getters
-    [[nodiscard]] std::string getRiff() const { return riff; }
+    [[nodiscard]] const std::string& getRiff() const { return riff; }
     [[nodiscard]] uint32_t getChunkSize() const { return chunkSize; }
-    [[nodiscard]] std::string getWave() const { return wave; }
-    [[nodiscard]] std::string getFmt() const { return fmt; }
+    [[nodiscard]] const std::string& getWave() const { return wave; }
+    [[nodiscard]] const std::string& getFmt() const { return fmt; }
     [[nodiscard]] uint32_t getSubchunk1Size() const { return subchunk1Size; }
     [[nodiscard]] uint16_t getAudioFormat() const { return audioFormat; }
     [[nodiscard]] uint16_t getNumChannels() const { return numChannels; }
@@ -76,7 +76,7 @@ public:
     [[nodiscard]] uint32_t getByteRate() const { return byteRate; }
     [[nodiscard]] uint16_t getBlockAlign() const { return blockAlign; }
     [[nodiscard]] uint16_t getBitsPerSample() const { return bitsPerSample; }
-    [[nodiscard]] std::string getData() const { return data; }
+    [[nodiscard]] const std::string& getData() const { return data; }
     [[nodiscard]] uint32_t getSubchunk2Size() const { return subchunk2Size; }
     [[nodiscard]] const std::vector<int16_t>& getAudioData() const { return audioData; }
     [[nodiscard]] const std::unordered_map<std::string, std::vector<char>>& getOtherChunks() const { return otherChunks; }
