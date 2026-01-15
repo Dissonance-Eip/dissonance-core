@@ -14,7 +14,7 @@
 #include <algorithm>
 #include <vector>
 
-#include "WavParser.hpp"
+#include "WavProcessor.hpp"
 
 class GUI {
 public:
@@ -28,7 +28,7 @@ public:
     static void printGenericChunk(const std::string& key, const std::vector<char>& value) ;
 
 private:
-    std::shared_ptr<Parser> data;
+    ProcessedWav processed;
     bool valid = false;
     std::string filename;
     std::array<std::string, 5> colors = {

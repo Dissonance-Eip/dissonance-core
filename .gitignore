@@ -1,0 +1,28 @@
+# Node.js
+node_modules/
+
+# Build outputs
+build/
+cmake-build-*/
+Release/
+Debug/
+
+# IDE
+.idea/
+.vscode/
+.vs/
+*.suo
+*.user
+
+# Compiled outputs
+*.node
+*.o
+*.obj
+*.exe
+
+# Archives
+*.tgz
+
+# Test files and outputs
+test_files/
+*-processed.wav

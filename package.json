@@ -1,0 +1,16 @@
+{
+  "name": "dissonance-core",
+  "version": "0.0.1",
+  "main": "index.js",
+  "gypfile": true,
+  "scripts": {
+    "build": "node-gyp configure build",
+    "deploy": "npm run build && cd ..\\..\\OneDrive\\Documents\\Dissonance\\ui && npm run copy-core-addon"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.0.0"
+  },
+  "devDependencies": {
+    "node-gyp": "^10.0.0"
+  }
+}

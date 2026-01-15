@@ -1,44 +1,58 @@
 cmake_minimum_required(VERSION 3.10)
-project(dissonance.pre-alpha)
+project(dissonance_core)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(include)
+# Include directories
+include_directories(${CMAKE_SOURCE_DIR}/include)
 
-set(SOURCES
-    src/main.cpp
-    src/WavGui.cpp
-    include/WavParser.hpp
-)
+option(BUILD_NODE_ADDON "Build the Node.js addon with CMake (node_api.h required)" OFF)
 
+if (BUILD_NODE_ADDON)
+    # Include node-addon-api headers
+    include_directories(${CMAKE_SOURCE_DIR}/node_modules/node-addon-api)
+
+    # If you want CMake to find node_api.h, point NODE_INCLUDE_DIR to your Node headers, e.g.
+    #   cmake -S . -B cmake-build -DBUILD_NODE_ADDON=ON -DNODE_INCLUDE_DIR="C:/Users/<you>/AppData/Local/node-gyp/Cache/<ver>/include/node"
+    if (DEFINED NODE_INCLUDE_DIR)
+        include_directories(${NODE_INCLUDE_DIR})
+    endif()
+
+    add_library(dissonance_core SHARED
+            src/addon.cpp
+            src/AddonHelpers.cpp
+            src/WavUtils.cpp
+            src/WavProcessor.cpp
+    )
+
+    # Build actual .node file for Node.js
+    set_target_properties(dissonance_core PROPERTIES
+            PREFIX ""
+            SUFFIX ".node"
+    )
+endif()
+
+# Standalone CLI for inspecting WAV files
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-add_executable(dissonance.pre-alpha ${SOURCES})
+set(DISSONANCE_SOURCES
+        src/main.cpp
+        src/WavGUI.cpp
+        src/WavUtils.cpp
+        src/WavProcessor.cpp
+)
 
-# Enable testing and fetch Google Test only if building tests
-include(CTest)
-if(BUILD_TESTING)
-    include(FetchContent)
-    FetchContent_Declare(
-            googletest
-            URL https://github.com/google/googletest/archive/refs/heads/main.zip
-            DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    )
-    # For Windows: Prevent overriding the parent project's compiler/linker settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+add_executable(dissonance.pre-alpha ${DISSONANCE_SOURCES})
 
-    enable_testing()
-    include_directories(${gtest_SOURCE_DIR}/include)
-
-    # Add test executable
-    file(GLOB TEST_SOURCES tests/*.cpp)
-    if(TEST_SOURCES)
-        add_executable(runTests ${TEST_SOURCES} src/WavGui.cpp)
-        set_target_properties(runTests PROPERTIES
+# Optional GoogleTest support when tests are present
+enable_testing()
+file(GLOB TEST_SOURCES tests/*.cpp)
+find_package(GTest QUIET)
+if (GTest_FOUND AND TEST_SOURCES)
+        add_executable(runTests ${TEST_SOURCES} src/WavGUI.cpp src/WavUtils.cpp src/WavProcessor.cpp)
+    set_target_properties(runTests PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        )
-        target_link_libraries(runTests PRIVATE gtest gtest_main pthread)
-        add_test(NAME runTests COMMAND runTests)
-    endif()
+    )
+    target_link_libraries(runTests PRIVATE GTest::GTest GTest::Main)
+    add_test(NAME runTests COMMAND runTests)
 endif()
