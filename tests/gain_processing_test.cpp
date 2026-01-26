@@ -14,7 +14,7 @@ protected:
         // Verify test file exists
         std::ifstream file(testFile, std::ios::binary);
         if (!file.is_open()) {
-            SKIP() << "Test file not found: " << testFile;
+            GTEST_SKIP() << "Test file not found: " << testFile;
         }
     }
 };
