@@ -3,8 +3,78 @@
 
 #include "AddonHelpers.hpp"
 #include "WavProcessor.hpp"
+#include "WindowFunctions.hpp"
 
 namespace {
+
+Napi::Value GenerateWindow(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
+        throw Napi::TypeError::New(env, "Expected (windowType: string, size: number)");
+    }
+
+    const std::string typeStr = info[0].As<Napi::String>();
+    const size_t size = info[1].As<Napi::Number>().Uint32Value();
+
+    WindowFunctions::Type type;
+    if (typeStr == "hann") {
+        type = WindowFunctions::Type::Hann;
+    } else if (typeStr == "hamming") {
+        type = WindowFunctions::Type::Hamming;
+    } else {
+        throw Napi::TypeError::New(env, "Window type must be 'hann' or 'hamming'");
+    }
+
+    try {
+        const std::vector<double> window = WindowFunctions::generate(type, size);
+        
+        Napi::Array result = Napi::Array::New(env, window.size());
+        for (size_t i = 0; i < window.size(); ++i) {
+            result[i] = Napi::Number::New(env, window[i]);
+        }
+        
+        return result;
+    } catch (const std::exception& e) {
+        throw Napi::Error::New(env, e.what());
+    }
+}
+
+Napi::Value ApplyWindow(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
+        throw Napi::TypeError::New(env, "Expected (samples: number[], window: number[])");
+    }
+
+    Napi::Array samplesArray = info[0].As<Napi::Array>();
+    Napi::Array windowArray = info[1].As<Napi::Array>();
+
+    if (samplesArray.Length() != windowArray.Length()) {
+        throw Napi::TypeError::New(env, "Sample and window arrays must have the same length");
+    }
+
+    try {
+        std::vector<double> samples(samplesArray.Length());
+        std::vector<double> window(windowArray.Length());
+
+        for (uint32_t i = 0; i < samplesArray.Length(); ++i) {
+            samples[i] = samplesArray.Get(i).As<Napi::Number>().DoubleValue();
+            window[i] = windowArray.Get(i).As<Napi::Number>().DoubleValue();
+        }
+
+        WindowFunctions::apply(samples, window);
+
+        Napi::Array result = Napi::Array::New(env, samples.size());
+        for (size_t i = 0; i < samples.size(); ++i) {
+            result[i] = Napi::Number::New(env, samples[i]);
+        }
+
+        return result;
+    } catch (const std::exception& e) {
+        throw Napi::Error::New(env, e.what());
+    }
+}
 
 Napi::Value Process(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
@@ -54,6 +124,8 @@ Napi::Value Process(const Napi::CallbackInfo& info) {
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("process", Napi::Function::New(env, Process));
+    exports.Set("generateWindow", Napi::Function::New(env, GenerateWindow));
+    exports.Set("applyWindow", Napi::Function::New(env, ApplyWindow));
     return exports;
 }
 

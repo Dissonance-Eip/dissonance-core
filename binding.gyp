@@ -7,7 +7,8 @@
         "src/AddonHelpers.cpp",
           "src/GainProcessor.cpp",
         "src/WavUtils.cpp",
-        "src/WavProcessor.cpp"
+        "src/WavProcessor.cpp",
+        "src/WindowFunctions.cpp"
       ],
       "include_dirs": [
         "<!(node -p \"require('node-addon-api').include\")",
