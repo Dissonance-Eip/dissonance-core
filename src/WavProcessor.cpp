@@ -1,5 +1,6 @@
 #include "WavProcessor.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>

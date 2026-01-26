@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(dissonance_core)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
