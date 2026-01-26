@@ -3,8 +3,8 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "WavParser.hpp"
 #include "WavUtils.hpp"
@@ -20,6 +20,6 @@ struct ProcessedWav {
     std::string processedPath;
 };
 
-ProcessedWav processWavFile(const std::string& inputPath, double gain = 0.8);
+ProcessedWav processWavFile(const std::string& inputPath, double gain = 0.8, const std::string& outputPath = "");
 
 #endif // WAVPROCESSOR_H

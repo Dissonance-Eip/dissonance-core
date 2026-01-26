@@ -16,15 +16,19 @@ Napi::Value Process(const Napi::CallbackInfo& info) {
     const std::string inputPath = info[0].As<Napi::String>();
 
     double gain = 0.8; // default reduce slightly
+    std::string outputPath = "";
     if (info.Length() >= 2 && info[1].IsObject()) {
         Napi::Object opts = info[1].As<Napi::Object>();
         if (opts.Has("gain") && opts.Get("gain").IsNumber()) {
             gain = opts.Get("gain").As<Napi::Number>().DoubleValue();
         }
+        if (opts.Has("outputPath") && opts.Get("outputPath").IsString()) {
+            outputPath = opts.Get("outputPath").As<Napi::String>();
+        }
     }
 
     try {
-        const ProcessedWav processed = processWavFile(inputPath, gain);
+        const ProcessedWav processed = processWavFile(inputPath, gain, outputPath);
 
         Napi::Object listTags = Napi::Object::New(env);
         listTags.Set("title", Napi::String::New(env, processed.listTags.title));

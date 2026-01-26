@@ -1,31 +1,29 @@
 #include "WavProcessor.hpp"
 
-#include <algorithm>
-#include <cmath>
 #include <filesystem>
 #include <fstream>
-#include <limits>
 #include <stdexcept>
+
+#include "GainProcessor.hpp"
+
+namespace fs = std::filesystem;
 
 namespace {
 
-void applyGain(std::vector<int16_t>& samples, double gain) {
-    if (gain <= 0.0) return;
-    constexpr int minVal = std::numeric_limits<int16_t>::min();
-    constexpr int maxVal = std::numeric_limits<int16_t>::max();
-    for (auto& s : samples) {
-        const int scaled = static_cast<int>(std::lround(static_cast<double>(s) * gain));
-        s = static_cast<int16_t>(std::clamp(scaled, minVal, maxVal));
+std::string makeOutputPath(const std::string& inputPath, const std::string& customPath) {
+    if (!customPath.empty()) {
+        return customPath;
     }
-}
 
-std::string makeOutputPath(const std::string& inputPath) {
-    std::filesystem::path inPath(inputPath);
-    std::filesystem::path parent = inPath.parent_path();
+    fs::path inPath(inputPath);
+    fs::path parent = inPath.parent_path();
     std::string stem = inPath.stem().string();
     std::string ext = inPath.extension().string();
-    if (ext.empty()) ext = ".wav";
-    std::filesystem::path out = parent / (stem + "-processed" + ext);
+    if (ext.empty()) {
+        ext = ".wav";
+    }
+
+    fs::path out = parent / (stem + "-processed" + ext);
     return out.string();
 }
 
@@ -71,7 +69,7 @@ void writeWavFile(const Parser& parser, const std::vector<int16_t>& samples, con
 
 } // namespace
 
-ProcessedWav processWavFile(const std::string& inputPath, double gain) {
+ProcessedWav processWavFile(const std::string& inputPath, double gain, const std::string& outputPath) {
     Parser parser;
     std::ifstream file(inputPath, std::ios::binary);
     if (!file.is_open()) {
@@ -85,8 +83,9 @@ ProcessedWav processWavFile(const std::string& inputPath, double gain) {
     result.originalSamples = parser.getAudioData();
     result.processedSamples = result.originalSamples;
 
-    applyGain(result.processedSamples, gain);
-    result.processedPath = makeOutputPath(inputPath);
+    GainProcessor gainProcessor(gain);
+    gainProcessor.apply(result.processedSamples);
+    result.processedPath = makeOutputPath(inputPath, outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);
 
     result.metadataText = formatMetadataText(parser);

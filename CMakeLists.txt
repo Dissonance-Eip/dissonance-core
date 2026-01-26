@@ -21,6 +21,7 @@ if (BUILD_NODE_ADDON)
     add_library(dissonance_core SHARED
             src/addon.cpp
             src/AddonHelpers.cpp
+            src/GainProcessor.cpp
             src/WavUtils.cpp
             src/WavProcessor.cpp
     )
@@ -38,6 +39,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set(DISSONANCE_SOURCES
         src/main.cpp
         src/WavGUI.cpp
+        src/GainProcessor.cpp
         src/WavUtils.cpp
         src/WavProcessor.cpp
 )
@@ -49,7 +51,7 @@ enable_testing()
 file(GLOB TEST_SOURCES tests/*.cpp)
 find_package(GTest QUIET)
 if (GTest_FOUND AND TEST_SOURCES)
-        add_executable(runTests ${TEST_SOURCES} src/WavGUI.cpp src/WavUtils.cpp src/WavProcessor.cpp)
+        add_executable(runTests ${TEST_SOURCES} src/WavUtils.cpp src/WavProcessor.cpp src/GainProcessor.cpp)
     set_target_properties(runTests PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
