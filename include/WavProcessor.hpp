@@ -18,6 +18,10 @@ struct ProcessedWav {
     std::string metadataText;
     std::string waveformText;
     std::string processedPath;
+    bool fftApplied = false;
+    size_t fftFramesProcessed = 0;
+    size_t fftBins = 0;
+    size_t fftCutoffBin = 0;
 };
 
 ProcessedWav processWavFile(const std::string& inputPath, double gain = 0.8, const std::string& outputPath = "");

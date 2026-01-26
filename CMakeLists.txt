@@ -25,6 +25,8 @@ if (BUILD_NODE_ADDON)
             src/GainProcessor.cpp
             src/WavUtils.cpp
             src/WavProcessor.cpp
+            src/WindowFunctions.cpp
+            src/FFTProcessor.cpp
     )
 
     # Build actual .node file for Node.js
@@ -44,6 +46,8 @@ if (BUILD_CLI)
             src/GainProcessor.cpp
             src/WavUtils.cpp
             src/WavProcessor.cpp
+            src/WindowFunctions.cpp
+            src/FFTProcessor.cpp
     )
 
     add_executable(dissonance.pre-alpha ${DISSONANCE_SOURCES})
@@ -54,7 +58,7 @@ enable_testing()
 file(GLOB TEST_SOURCES tests/*.cpp)
 find_package(GTest QUIET)
 if (GTest_FOUND AND TEST_SOURCES)
-        add_executable(runTests ${TEST_SOURCES} src/WavUtils.cpp src/WavProcessor.cpp src/GainProcessor.cpp)
+        add_executable(runTests ${TEST_SOURCES} src/WavUtils.cpp src/WavProcessor.cpp src/GainProcessor.cpp src/WindowFunctions.cpp src/FFTProcessor.cpp)
     set_target_properties(runTests PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )

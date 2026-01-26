@@ -12,6 +12,12 @@ This project has two repositories:
 Electron UI → IPC → C++ Addon → Audio Processing → IPC → Electron UI
 ```
 
+### FFT implementation (early research)
+- Current implementation uses a simple O(N^2) DFT/iDFT for correctness and zero dependencies.
+- Goal: validate the processing chain (window → FFT → modify → iFFT) before choosing a high-performance library.
+- Upgrade path: swap in a faster library (KissFFT/pffft/FFTW) when performance requirements are defined.
+- Tests: JavaScript (`test-fft.js`) and C++ (`tests/fft_processor_test.cpp`) cover impulse/round-trip correctness.
+
 ## Quick Start Workflow
 
 ### 1. Making Changes to C++ Code

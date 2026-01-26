@@ -5,6 +5,8 @@
 #include <stdexcept>
 
 #include "GainProcessor.hpp"
+#include "WindowFunctions.hpp"
+#include "FFTProcessor.hpp"
 
 namespace fs = std::filesystem;
 
@@ -85,6 +87,7 @@ ProcessedWav processWavFile(const std::string& inputPath, double gain, const std
 
     GainProcessor gainProcessor(gain);
     gainProcessor.apply(result.processedSamples);
+
     result.processedPath = makeOutputPath(inputPath, outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);
 
@@ -93,6 +96,51 @@ ProcessedWav processWavFile(const std::string& inputPath, double gain, const std
 
     if (auto it = result.otherChunks.find("LIST"); it != result.otherChunks.end()) {
         result.listTags = parseListChunk(it->second);
+    }
+
+    // Minimal spectral chain on the first block: window -> FFT -> zero high bins -> iFFT
+    const uint16_t numChannels = parser.getNumChannels();
+    if (numChannels > 0 && !result.processedSamples.empty()) {
+        const size_t totalFrames = result.processedSamples.size() / numChannels;
+        const size_t framesToProcess = std::min<size_t>(totalFrames, 2048); // keep O(N^2) manageable
+
+        if (framesToProcess > 1) {
+            const std::vector<double> window = WindowFunctions::generate(WindowFunctions::Type::Hann, framesToProcess);
+
+            auto processChannelBlock = [&](uint16_t channel) {
+                std::vector<double> block(framesToProcess);
+                for (size_t i = 0; i < framesToProcess; ++i) {
+                    block[i] = static_cast<double>(result.processedSamples[i * numChannels + channel]);
+                }
+
+                WindowFunctions::apply(block, window);
+                auto spectrum = FFTProcessor::fft(block);
+
+                const size_t cutoff = spectrum.size() / 4; // crude low-pass
+                for (size_t k = cutoff; k < spectrum.size(); ++k) {
+                    spectrum[k] = {0.0, 0.0};
+                }
+
+                auto reconstructed = FFTProcessor::ifft(spectrum);
+
+                constexpr int minVal = std::numeric_limits<int16_t>::min();
+                constexpr int maxVal = std::numeric_limits<int16_t>::max();
+                for (size_t i = 0; i < framesToProcess; ++i) {
+                    const int rounded = static_cast<int>(std::lround(reconstructed[i]));
+                    result.processedSamples[i * numChannels + channel] = static_cast<int16_t>(std::clamp(rounded, minVal, maxVal));
+                }
+
+                // Record metadata once (same for all channels)
+                result.fftApplied = true;
+                result.fftFramesProcessed = framesToProcess;
+                result.fftBins = spectrum.size();
+                result.fftCutoffBin = cutoff;
+            };
+
+            for (uint16_t ch = 0; ch < numChannels; ++ch) {
+                processChannelBlock(ch);
+            }
+        }
     }
 
     return result;
