@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD 17)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 option(BUILD_NODE_ADDON "Build the Node.js addon with CMake (node_api.h required)" OFF)
+option(BUILD_CLI "Build the CLI executable (requires WavGUI)" OFF)
 
 if (BUILD_NODE_ADDON)
     # Include node-addon-api headers
@@ -33,18 +34,20 @@ if (BUILD_NODE_ADDON)
     )
 endif()
 
-# Standalone CLI for inspecting WAV files
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# Standalone CLI for inspecting WAV files (optional)
+if (BUILD_CLI)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-set(DISSONANCE_SOURCES
-        src/main.cpp
-        src/WavGUI.cpp
-        src/GainProcessor.cpp
-        src/WavUtils.cpp
-        src/WavProcessor.cpp
-)
+    set(DISSONANCE_SOURCES
+            src/main.cpp
+            src/WavGUI.cpp
+            src/GainProcessor.cpp
+            src/WavUtils.cpp
+            src/WavProcessor.cpp
+    )
 
-add_executable(dissonance.pre-alpha ${DISSONANCE_SOURCES})
+    add_executable(dissonance.pre-alpha ${DISSONANCE_SOURCES})
+endif()
 
 # Optional GoogleTest support when tests are present
 enable_testing()
