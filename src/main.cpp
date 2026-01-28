@@ -1,7 +1,3 @@
-//
-// Created by noe on 16/03/2025.
-//
-
 #include <iostream>
 #include <memory>
 #include <stdexcept>
