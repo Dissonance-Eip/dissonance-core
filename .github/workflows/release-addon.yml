@@ -2,7 +2,7 @@ name: Release Core Addon
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, '57-github-action-for-automatic-workflow-with-ui']
   workflow_dispatch:
 
 permissions:
