@@ -16,7 +16,7 @@ jobs:
       matrix:
         include:
           - os: windows
-            runner: windows-2022
+            runner: windows-latest
             arch: x64
           - os: linux
             runner: ubuntu-latest
