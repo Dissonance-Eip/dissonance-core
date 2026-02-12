@@ -10,11 +10,26 @@ permissions:
 
 jobs:
   build-addon:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows
+            runner: windows-2022
+            arch: x64
+          - os: linux
+            runner: ubuntu-latest
+            arch: x64
+          - os: linux
+            runner: ubuntu-24.04-arm64
+            arch: arm64
+          - os: macos
+            runner: macos-13
+            arch: x64
+          - os: macos
+            runner: macos-14
+            arch: arm64
 
     steps:
       - name: Checkout repository
@@ -24,6 +39,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          architecture: ${{ matrix.arch }}
           cache: npm
 
       - name: Install dependencies
@@ -38,7 +54,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: addon-${{ matrix.os }}
+          name: addon-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/*.node
 
   release:
