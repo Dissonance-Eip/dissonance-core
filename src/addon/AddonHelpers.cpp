@@ -1,10 +1,10 @@
-#include "AddonHelpers.hpp"
+#include "addon/AddonHelpers.hpp"
 
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
 
-std::string toHexPreview(const std::vector<char>& data, std::size_t maxBytes) {
+std::string toHexPreview(const std::vector<char> &data, std::size_t maxBytes) {
     std::ostringstream oss;
     const std::size_t limit = std::min(maxBytes, data.size());
     for (std::size_t i = 0; i < limit; ++i) {
@@ -20,7 +20,7 @@ std::string toHexPreview(const std::vector<char>& data, std::size_t maxBytes) {
     return oss.str();
 }
 
-Napi::Object makeMetadataObject(Napi::Env env, const Parser& parser) {
+Napi::Object makeMetadataObject(Napi::Env env, const Parser &parser) {
     Napi::Object meta = Napi::Object::New(env);
     meta.Set("riff", Napi::String::New(env, parser.getRiff()));
     meta.Set("chunkSize", Napi::Number::New(env, parser.getChunkSize()));
@@ -39,11 +39,11 @@ Napi::Object makeMetadataObject(Napi::Env env, const Parser& parser) {
     return meta;
 }
 
-Napi::Array makeOtherChunks(Napi::Env env, const Parser& parser) {
-    const auto& chunks = parser.getOtherChunks();
+Napi::Array makeOtherChunks(Napi::Env env, const Parser &parser) {
+    const auto &chunks = parser.getOtherChunks();
     Napi::Array arr = Napi::Array::New(env, chunks.size());
     std::size_t idx = 0;
-    for (const auto& [id, blob] : chunks) {
+    for (const auto &[id, blob] : chunks) {
         Napi::Object entry = Napi::Object::New(env);
         entry.Set("id", Napi::String::New(env, id));
         entry.Set("size", Napi::Number::New(env, blob.size()));

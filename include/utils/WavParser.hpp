@@ -1,5 +1,5 @@
 #ifndef WAVPARSER_H
-    #define WAVPARSER_H
+#define WAVPARSER_H
 
 #include <cstdint>
 #include <fstream>
@@ -10,10 +10,10 @@
 #include <unordered_map>
 
 class Parser {
-public:
+  public:
     Parser() = default;
 
-    void readFromFile(std::ifstream& file) {
+    void readFromFile(std::ifstream &file) {
         if (!file.is_open()) {
             throw std::runtime_error("File not open");
         }
@@ -41,7 +41,7 @@ public:
 
                 if (bitsPerSample == 16) {
                     std::vector<int16_t> tempData(subchunk2Size / 2);
-                    if (!file.read(reinterpret_cast<char*>(tempData.data()), subchunk2Size)) {
+                    if (!file.read(reinterpret_cast<char *>(tempData.data()), subchunk2Size)) {
                         throw std::runtime_error("Failed to read audio data");
                     }
                     audioData.assign(tempData.begin(), tempData.end());
@@ -78,39 +78,40 @@ public:
     [[nodiscard]] uint16_t getBitsPerSample() const { return bitsPerSample; }
     [[nodiscard]] std::string getData() const { return data; }
     [[nodiscard]] uint32_t getSubchunk2Size() const { return subchunk2Size; }
-    [[nodiscard]] const std::vector<int16_t>& getAudioData() const { return audioData; }
-    [[nodiscard]] const std::unordered_map<std::string, std::vector<char>>& getOtherChunks() const { return otherChunks; }
+    [[nodiscard]] const std::vector<int16_t> &getAudioData() const { return audioData; }
+    [[nodiscard]] const std::unordered_map<std::string, std::vector<char>> &getOtherChunks() const {
+        return otherChunks;
+    }
 
-private:
-    static void readString(std::ifstream& file, std::string& field, const size_t size) {
+  private:
+    static void readString(std::ifstream &file, std::string &field, const size_t size) {
         field.resize(size);
         if (!file.read(&field[0], static_cast<std::streamsize>(size))) {
             throw std::runtime_error("Failed to read string field");
         }
     }
 
-    template <typename T>
-    static void readData(std::ifstream& file, T& field) {
-        if (!file.read(reinterpret_cast<char*>(&field), sizeof(field))) {
+    template <typename T> static void readData(std::ifstream &file, T &field) {
+        if (!file.read(reinterpret_cast<char *>(&field), sizeof(field))) {
             throw std::runtime_error("Failed to read data field");
         }
     }
 
-    std::string riff;                     // "RIFF"
-    uint32_t chunkSize{0};                // Size of the entire file in bytes minus 8 bytes
-    std::string wave;                     // "WAVE"
-    std::string fmt;                      // "fmt "
-    uint32_t subchunk1Size{0};            // Size of the fmt chunk
-    uint16_t audioFormat{0};              // Audio format (1 for PCM)
-    uint16_t numChannels{0};              // Number of channels
-    uint32_t sampleRate{0};               // Sample rate
-    uint32_t byteRate{0};                 // Byte rate
-    uint16_t blockAlign{0};               // Block align
-    uint16_t bitsPerSample{0};            // Bits per sample
-    std::string data;                     // "data"
-    uint32_t subchunk2Size{0};            // Size of the data chunk
-    std::vector<int16_t> audioData;       // Audio data
+    std::string riff;               // "RIFF"
+    uint32_t chunkSize{0};          // Size of the entire file in bytes minus 8 bytes
+    std::string wave;               // "WAVE"
+    std::string fmt;                // "fmt "
+    uint32_t subchunk1Size{0};      // Size of the fmt chunk
+    uint16_t audioFormat{0};        // Audio format (1 for PCM)
+    uint16_t numChannels{0};        // Number of channels
+    uint32_t sampleRate{0};         // Sample rate
+    uint32_t byteRate{0};           // Byte rate
+    uint16_t blockAlign{0};         // Block align
+    uint16_t bitsPerSample{0};      // Bits per sample
+    std::string data;               // "data"
+    uint32_t subchunk2Size{0};      // Size of the data chunk
+    std::vector<int16_t> audioData; // Audio data
     std::unordered_map<std::string, std::vector<char>> otherChunks; // Other chunks (e.g., "LIST")
 };
 
-#endif //WAVPARSER_H
+#endif // WAVPARSER_H

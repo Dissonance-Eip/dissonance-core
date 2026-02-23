@@ -1,6 +1,6 @@
 // Test script for Hann and Hamming window functions
 
-const core = require('./build/Release/dissonance_core.node');
+const core = require('../../build/Release/dissonance_core.node');
 
 console.log('Testing Window Functions\n' + '='.repeat(50));
 

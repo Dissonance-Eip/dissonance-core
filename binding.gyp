@@ -3,13 +3,13 @@
     {
       "target_name": "dissonance_core",
       "sources": [
-        "src/addon.cpp",
-        "src/AddonHelpers.cpp",
-          "src/GainProcessor.cpp",
-        "src/WavUtils.cpp",
-        "src/WavProcessor.cpp",
-        "src/WindowFunctions.cpp",
-        "src/FFTProcessor.cpp"
+        "src/addon/addon.cpp",
+        "src/addon/AddonHelpers.cpp",
+        "src/audio/GainProcessor.cpp",
+        "src/utils/WavUtils.cpp",
+        "src/audio/WavProcessor.cpp",
+        "src/audio/WindowFunctions.cpp",
+        "src/audio/FFTProcessor.cpp"
       ],
       "include_dirs": [
         "<!(node -p \"require('node-addon-api').include\")",

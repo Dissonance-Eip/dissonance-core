@@ -1,68 +1,87 @@
 cmake_minimum_required(VERSION 3.10)
-project(dissonance_core)
+project(dissonance-core LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Include directories
-include_directories(${CMAKE_SOURCE_DIR}/include)
-
 option(BUILD_NODE_ADDON "Build the Node.js addon with CMake (node_api.h required)" OFF)
-option(BUILD_CLI "Build the CLI executable (requires WavGUI)" OFF)
+option(BUILD_CLI "Build the CLI executable (requires WavGUI)" ON)
 
-if (BUILD_NODE_ADDON)
-    # Include node-addon-api headers
-    include_directories(${CMAKE_SOURCE_DIR}/node_modules/node-addon-api)
+set(DISSONANCE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
-    # If you want CMake to find node_api.h, point NODE_INCLUDE_DIR to your Node headers, e.g.
-    #   cmake -S . -B cmake-build -DBUILD_NODE_ADDON=ON -DNODE_INCLUDE_DIR="C:/Users/<you>/AppData/Local/node-gyp/Cache/<ver>/include/node"
-    if (DEFINED NODE_INCLUDE_DIR)
-        include_directories(${NODE_INCLUDE_DIR})
-    endif()
+set(DISSONANCE_AUDIO_SOURCES
+        src/audio/GainProcessor.cpp
+        src/utils/WavUtils.cpp
+        src/audio/WavProcessor.cpp
+        src/audio/WindowFunctions.cpp
+        src/audio/FFTProcessor.cpp
+)
 
-    add_library(dissonance_core SHARED
-            src/addon.cpp
-            src/AddonHelpers.cpp
-            src/GainProcessor.cpp
-            src/WavUtils.cpp
-            src/WavProcessor.cpp
-            src/WindowFunctions.cpp
-            src/FFTProcessor.cpp
-    )
+# -------------------------
+# Node.js addon (.node)
+# -------------------------
+if(BUILD_NODE_ADDON)
+        add_library(dissonance_core SHARED
+                src/addon/addon.cpp
+                src/addon/AddonHelpers.cpp
+                ${DISSONANCE_AUDIO_SOURCES}
+        )
 
-    # Build actual .node file for Node.js
-    set_target_properties(dissonance_core PROPERTIES
-            PREFIX ""
-            SUFFIX ".node"
-    )
+        target_include_directories(dissonance_core PRIVATE
+                ${DISSONANCE_INCLUDE_DIR}
+                ${CMAKE_SOURCE_DIR}/node_modules/node-addon-api
+        )
+
+        # If you want CMake to find node_api.h, point NODE_INCLUDE_DIR to your Node headers, e.g.
+        # cmake -S . -B cmake-build -DBUILD_NODE_ADDON=ON -DNODE_INCLUDE_DIR="C:/Users/<you>/AppData/Local/node-gyp/Cache/<ver>/include/node"
+        if(DEFINED NODE_INCLUDE_DIR)
+                target_include_directories(dissonance_core PRIVATE ${NODE_INCLUDE_DIR})
+        endif()
+
+        set_target_properties(dissonance_core PROPERTIES
+                PREFIX ""
+                SUFFIX ".node"
+        )
 endif()
 
-# Standalone CLI for inspecting WAV files (optional)
-if (BUILD_CLI)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+# -------------------------
+# Standalone CLI executable
+# -------------------------
+if(BUILD_CLI)
+        add_executable(dissonance.core
+                src/cli/main.cpp
+                src/cli/Commands.cpp
+                src/cli/WavGUI.cpp
+                ${DISSONANCE_AUDIO_SOURCES}
+        )
 
-    set(DISSONANCE_SOURCES
-            src/main.cpp
-            src/WavGUI.cpp
-            src/GainProcessor.cpp
-            src/WavUtils.cpp
-            src/WavProcessor.cpp
-            src/WindowFunctions.cpp
-            src/FFTProcessor.cpp
-    )
+        target_include_directories(dissonance.core PRIVATE ${DISSONANCE_INCLUDE_DIR})
 
-    add_executable(dissonance.pre-alpha ${DISSONANCE_SOURCES})
+        set_target_properties(dissonance.core PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        )
 endif()
 
-# Optional GoogleTest support when tests are present
+# -------------------------
+# Unit tests (GoogleTest)
+# -------------------------
 enable_testing()
+
 file(GLOB TEST_SOURCES tests/*.cpp)
 find_package(GTest QUIET)
-if (GTest_FOUND AND TEST_SOURCES)
-        add_executable(runTests ${TEST_SOURCES} src/WavUtils.cpp src/WavProcessor.cpp src/GainProcessor.cpp src/WindowFunctions.cpp src/FFTProcessor.cpp)
-    set_target_properties(runTests PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-    target_link_libraries(runTests PRIVATE GTest::GTest GTest::Main)
-    add_test(NAME runTests COMMAND runTests)
+
+if(GTest_FOUND AND TEST_SOURCES)
+        add_executable(runTests
+                ${TEST_SOURCES}
+                ${DISSONANCE_AUDIO_SOURCES}
+        )
+
+        target_include_directories(runTests PRIVATE ${DISSONANCE_INCLUDE_DIR})
+
+        set_target_properties(runTests PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        )
+
+        target_link_libraries(runTests PRIVATE GTest::GTest GTest::Main)
+        add_test(NAME runTests COMMAND runTests)
 endif()

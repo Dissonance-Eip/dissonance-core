@@ -2,7 +2,7 @@
 #include <vector>
 #include <complex>
 
-#include "FFTProcessor.hpp"
+#include "audio/FFTProcessor.hpp"
 
 constexpr double EPS = 1e-6;
 
@@ -11,7 +11,7 @@ TEST(FFTProcessorTest, ImpulseHasFlatSpectrum) {
     auto spectrum = FFTProcessor::fft(impulse);
 
     ASSERT_EQ(spectrum.size(), impulse.size());
-    for (const auto& bin : spectrum) {
+    for (const auto &bin : spectrum) {
         EXPECT_NEAR(bin.real(), 1.0, EPS);
         EXPECT_NEAR(bin.imag(), 0.0, EPS);
     }

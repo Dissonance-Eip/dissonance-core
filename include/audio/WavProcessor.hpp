@@ -6,8 +6,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include "WavParser.hpp"
-#include "WavUtils.hpp"
+#include "../utils/WavParser.hpp"
+#include "../utils/WavUtils.hpp"
 
 struct ProcessedWav {
     Parser parser; // parsed header/info
@@ -24,6 +24,7 @@ struct ProcessedWav {
     size_t fftCutoffBin = 0;
 };
 
-ProcessedWav processWavFile(const std::string& inputPath, double gain = 0.8, const std::string& outputPath = "");
+ProcessedWav processWavFile(const std::string &inputPath, double gain = 0.8,
+                            const std::string &outputPath = "");
 
 #endif // WAVPROCESSOR_H

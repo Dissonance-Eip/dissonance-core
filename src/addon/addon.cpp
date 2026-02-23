@@ -2,14 +2,15 @@
 #include <string>
 #include <complex>
 
-#include "AddonHelpers.hpp"
-#include "WavProcessor.hpp"
-#include "WindowFunctions.hpp"
-#include "FFTProcessor.hpp"
+#include "addon/AddonHelpers.hpp"
+#include "audio/WavProcessor.hpp"
+#include "audio/WindowFunctions.hpp"
+#include "audio/FFTProcessor.hpp"
 
 namespace {
 
-std::vector<double> toDoubleVector(const Napi::Env& env, const Napi::Array& array, const char* context) {
+std::vector<double> toDoubleVector(const Napi::Env &env, const Napi::Array &array,
+                                   const char *context) {
     std::vector<double> values(array.Length());
     for (uint32_t i = 0; i < array.Length(); ++i) {
         Napi::Value v = array.Get(i);
@@ -21,16 +22,19 @@ std::vector<double> toDoubleVector(const Napi::Env& env, const Napi::Array& arra
     return values;
 }
 
-std::vector<std::complex<double>> toComplexVector(const Napi::Env& env, const Napi::Array& array, const char* context) {
+std::vector<std::complex<double>> toComplexVector(const Napi::Env &env, const Napi::Array &array,
+                                                  const char *context) {
     std::vector<std::complex<double>> values(array.Length());
     for (uint32_t i = 0; i < array.Length(); ++i) {
         Napi::Value v = array.Get(i);
         if (!v.IsObject()) {
-            throw Napi::TypeError::New(env, std::string(context) + " entries must be objects with real/imag");
+            throw Napi::TypeError::New(env, std::string(context) +
+                                                " entries must be objects with real/imag");
         }
         Napi::Object bin = v.As<Napi::Object>();
         if (!bin.Has("real") || !bin.Has("imag")) {
-            throw Napi::TypeError::New(env, std::string(context) + " entries must have real and imag fields");
+            throw Napi::TypeError::New(env, std::string(context) +
+                                                " entries must have real and imag fields");
         }
         values[i] = std::complex<double>(bin.Get("real").As<Napi::Number>().DoubleValue(),
                                          bin.Get("imag").As<Napi::Number>().DoubleValue());
@@ -38,7 +42,7 @@ std::vector<std::complex<double>> toComplexVector(const Napi::Env& env, const Na
     return values;
 }
 
-Napi::Array vectorToNumberArray(const Napi::Env& env, const std::vector<double>& values) {
+Napi::Array vectorToNumberArray(const Napi::Env &env, const std::vector<double> &values) {
     Napi::Array result = Napi::Array::New(env, values.size());
     for (size_t i = 0; i < values.size(); ++i) {
         result[i] = Napi::Number::New(env, values[i]);
@@ -46,7 +50,8 @@ Napi::Array vectorToNumberArray(const Napi::Env& env, const std::vector<double>&
     return result;
 }
 
-Napi::Array complexVectorToArray(const Napi::Env& env, const std::vector<std::complex<double>>& spectrum) {
+Napi::Array complexVectorToArray(const Napi::Env &env,
+                                 const std::vector<std::complex<double>> &spectrum) {
     Napi::Array result = Napi::Array::New(env, spectrum.size());
     for (size_t i = 0; i < spectrum.size(); ++i) {
         Napi::Object bin = Napi::Object::New(env);
@@ -57,7 +62,7 @@ Napi::Array complexVectorToArray(const Napi::Env& env, const std::vector<std::co
     return result;
 }
 
-Napi::Value GenerateWindow(const Napi::CallbackInfo& info) {
+Napi::Value GenerateWindow(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
@@ -79,12 +84,12 @@ Napi::Value GenerateWindow(const Napi::CallbackInfo& info) {
     try {
         const std::vector<double> window = WindowFunctions::generate(type, size);
         return vectorToNumberArray(env, window);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
 }
 
-Napi::Value ApplyWindow(const Napi::CallbackInfo& info) {
+Napi::Value ApplyWindow(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
@@ -104,12 +109,12 @@ Napi::Value ApplyWindow(const Napi::CallbackInfo& info) {
 
         WindowFunctions::apply(samples, window);
         return vectorToNumberArray(env, samples);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
 }
 
-Napi::Value FFT(const Napi::CallbackInfo& info) {
+Napi::Value FFT(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 1 || !info[0].IsArray()) {
@@ -125,12 +130,12 @@ Napi::Value FFT(const Napi::CallbackInfo& info) {
         std::vector<double> samples = toDoubleVector(env, samplesArray, "samples");
         const std::vector<std::complex<double>> spectrum = FFTProcessor::fft(samples);
         return complexVectorToArray(env, spectrum);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
 }
 
-Napi::Value IFFT(const Napi::CallbackInfo& info) {
+Napi::Value IFFT(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 1 || !info[0].IsArray()) {
@@ -143,15 +148,16 @@ Napi::Value IFFT(const Napi::CallbackInfo& info) {
     }
 
     try {
-        std::vector<std::complex<double>> spectrum = toComplexVector(env, spectrumArray, "Spectrum");
+        std::vector<std::complex<double>> spectrum =
+            toComplexVector(env, spectrumArray, "Spectrum");
         const std::vector<double> samples = FFTProcessor::ifft(spectrum);
         return vectorToNumberArray(env, samples);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
 }
 
-Napi::Value FFTMagnitude(const Napi::CallbackInfo& info) {
+Napi::Value FFTMagnitude(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 1 || !info[0].IsArray()) {
@@ -160,15 +166,16 @@ Napi::Value FFTMagnitude(const Napi::CallbackInfo& info) {
 
     Napi::Array spectrumArray = info[0].As<Napi::Array>();
     try {
-        std::vector<std::complex<double>> spectrum = toComplexVector(env, spectrumArray, "Spectrum");
+        std::vector<std::complex<double>> spectrum =
+            toComplexVector(env, spectrumArray, "Spectrum");
         const std::vector<double> mags = FFTProcessor::magnitude(spectrum);
         return vectorToNumberArray(env, mags);
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
 }
 
-Napi::Value Process(const Napi::CallbackInfo& info) {
+Napi::Value Process(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 1 || !info[0].IsString()) {
@@ -213,7 +220,7 @@ Napi::Value Process(const Napi::CallbackInfo& info) {
         result.Set("fftBins", Napi::Number::New(env, processed.fftBins));
         result.Set("fftCutoffBin", Napi::Number::New(env, processed.fftCutoffBin));
         return result;
-    } catch (const std::exception& e) {
+    } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
 }
