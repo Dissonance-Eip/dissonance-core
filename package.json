@@ -12,7 +12,8 @@
     "build:local": "npm run build:addon:dist && npm run build:cli:debug",
     "test": "node tests/js/test-fft.js && node tests/js/test-gain.js && node tests/js/test-window.js",
     "format:cpp": "node scripts/clang-format.js",
-    "format:cpp:check": "node scripts/clang-format.js --check"
+    "format:cpp:check": "node scripts/clang-format.js --check",
+    "cppcheck": "node scripts/cppcheck.js"
   },
   "dependencies": {
     "node-addon-api": "^7.0.0"

@@ -1,5 +1,6 @@
 #include "audio/FFTProcessor.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
@@ -52,10 +53,8 @@ std::vector<double> FFTProcessor::ifft(const std::vector<std::complex<double>> &
 }
 
 std::vector<double> FFTProcessor::magnitude(const std::vector<std::complex<double>> &spectrum) {
-    std::vector<double> mags;
-    mags.reserve(spectrum.size());
-    for (const auto &c : spectrum) {
-        mags.push_back(std::abs(c));
-    }
+    std::vector<double> mags(spectrum.size());
+    std::transform(spectrum.begin(), spectrum.end(), mags.begin(),
+                   [](const std::complex<double> &value) { return std::abs(value); });
     return mags;
 }

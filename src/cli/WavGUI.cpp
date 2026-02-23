@@ -21,11 +21,10 @@ void printField(const std::string &label, const std::string &value) {
     }
 }
 
-GUI::GUI(const std::string &filename) : filename(filename) {
+GUI::GUI(const std::string &filename)
+    : processed(processWavFile(filename, 0.8)), valid(true), filename(filename) {
     std::cout << COLORS[0] << "Opening file: " << COLORS[3] << filename << COLORS[4] << std::endl;
-    processed = processWavFile(filename, 0.8);
     std::cout << COLORS[3] << "File opened successfully" << COLORS[4] << std::endl;
-    valid = true;
 }
 
 void GUI::printMetadata() const {
