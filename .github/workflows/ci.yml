@@ -1,28 +1,98 @@
-name: C++ CI
+name: Core Quality Checks
 
 on:
   push:
-    branches: [main, dev]
+    branches:
+      - '**'
   pull_request:
-    branches: [dev]
+    branches:
+      - '**'
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  merge_group:
+    types:
+      - checks_requested
+
+concurrency:
+  group: core-quality-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  cppcheck:
+    name: Cppcheck Static Analysis
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          cppcheck \
+            --enable=warning,style,performance,portability \
+            --std=c++17 \
+            --language=c++ \
+            --error-exitcode=1 \
+            --quiet \
+            -I include \
+            src
+
+  clang-format-check:
+    name: Clang Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: npm run format:cpp:check
+
+  cmake-tests:
+    name: CMake Build and Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake g++ libgtest-dev
 
-      - name: Build and test
-        run: |
-          mkdir -p build
-          cd build
-          cmake ..
-          make
-          ctest --output-on-failure
+      - name: Configure CMake
+        run: cmake -S . -B build -DBUILD_NODE_ADDON=OFF -DBUILD_CLI=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
