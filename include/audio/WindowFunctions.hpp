@@ -6,11 +6,8 @@
 #include <cstdint>
 
 class WindowFunctions {
-public:
-    enum class Type {
-        Hann,
-        Hamming
-    };
+  public:
+    enum class Type { Hann, Hamming };
 
     /**
      * Generate a window function of the specified type and size
@@ -25,16 +22,16 @@ public:
      * @param samples The audio samples to window (modified in place)
      * @param window The window coefficients to apply
      */
-    static void apply(std::vector<double>& samples, const std::vector<double>& window);
+    static void apply(std::vector<double> &samples, const std::vector<double> &window);
 
     /**
      * Apply a window function to int16_t samples
      * @param samples The audio samples to window (modified in place)
      * @param window The window coefficients to apply
      */
-    static void apply(std::vector<int16_t>& samples, const std::vector<double>& window);
+    static void apply(std::vector<int16_t> &samples, const std::vector<double> &window);
 
-private:
+  private:
     static std::vector<double> generateHann(size_t size);
     static std::vector<double> generateHamming(size_t size);
 };

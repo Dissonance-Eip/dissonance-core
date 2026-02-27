@@ -1,5 +1,5 @@
 // Simple FFT/iFFT test script
-const core = require('./build/Release/dissonance_core.node');
+const core = require('../../build/Release/dissonance_core.node');
 
 function approxEqual(a, b, eps = 1e-6) {
   return Math.abs(a - b) < eps;

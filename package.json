@@ -4,8 +4,16 @@
   "main": "index.js",
   "gypfile": true,
   "scripts": {
-    "build": "node-gyp configure build",
-    "deploy": "npm run build && cd ..\\..\\OneDrive\\Documents\\Dissonance\\ui && npm run copy-core-addon"
+    "build": "node scripts/build-addon.js",
+    "build:addon": "npm run build",
+    "build:addon:dist": "npm run build:addon && node scripts/prepare-artifact.js",
+    "build:cli:debug": "node scripts/build-cli.js --config=Debug",
+    "build:cli:release": "node scripts/build-cli.js --config=Release",
+    "build:local": "npm run build:addon:dist && npm run build:cli:debug",
+    "test": "node tests/js/test-fft.js && node tests/js/test-gain.js && node tests/js/test-window.js",
+    "format:cpp": "node scripts/clang-format.js",
+    "format:cpp:check": "node scripts/clang-format.js --check",
+    "cppcheck": "node scripts/cppcheck.js"
   },
   "dependencies": {
     "node-addon-api": "^7.0.0"

@@ -1,20 +1,16 @@
-#include "WavUtils.hpp"
+#include "utils/WavUtils.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <sstream>
 #include <string>
 
-ListTags parseListChunk(const std::vector<char>& value) {
+ListTags parseListChunk(const std::vector<char> &value) {
     ListTags tags{};
 
-    const std::unordered_map<std::string, std::string*> chunkMap = {
-        {"INAM", &tags.title},
-        {"IART", &tags.artist},
-        {"ICMT", &tags.comment},
-        {"ICRD", &tags.date},
-        {"ISFT", &tags.software},
-        {"IGNR", &tags.genre},
+    const std::unordered_map<std::string, std::string *> chunkMap = {
+        {"INAM", &tags.title},     {"IART", &tags.artist},   {"ICMT", &tags.comment},
+        {"ICRD", &tags.date},      {"ISFT", &tags.software}, {"IGNR", &tags.genre},
         {"ICOP", &tags.copyright},
     };
 
@@ -23,16 +19,18 @@ ListTags parseListChunk(const std::vector<char>& value) {
     while (i + 8 <= value.size()) { // need at least id + size
         const std::string chunkId(value.begin() + i, value.begin() + i + 4);
         i += 4;
-        const uint32_t chunkSize = *reinterpret_cast<const uint32_t*>(&value[i]);
+        const uint32_t chunkSize = *reinterpret_cast<const uint32_t *>(&value[i]);
         i += 4;
 
         const size_t end = std::min(value.size(), i + chunkSize);
         if (chunkMap.count(chunkId)) {
-            auto* field = chunkMap.at(chunkId);
+            auto *field = chunkMap.at(chunkId);
             *field = std::string(value.begin() + i, value.begin() + end);
-            field->erase(std::find_if(field->rbegin(), field->rend(), [](unsigned char ch) {
-                return !std::isspace(ch) && ch != '\0';
-            }).base(), field->end());
+            field->erase(
+                std::find_if(field->rbegin(), field->rend(),
+                             [](unsigned char ch) { return !std::isspace(ch) && ch != '\0'; })
+                    .base(),
+                field->end());
         }
         i += chunkSize;
         // WAV chunks must be word-aligned; skip padding byte if chunk size is odd
@@ -42,13 +40,14 @@ ListTags parseListChunk(const std::vector<char>& value) {
     }
 
     if (tags.date.size() == 8) {
-        tags.date = tags.date.substr(0, 4) + "-" + tags.date.substr(4, 2) + "-" + tags.date.substr(6, 2);
+        tags.date =
+            tags.date.substr(0, 4) + "-" + tags.date.substr(4, 2) + "-" + tags.date.substr(6, 2);
     }
 
     return tags;
 }
 
-std::string formatMetadataText(const Parser& parser) {
+std::string formatMetadataText(const Parser &parser) {
     std::ostringstream oss;
     oss << "Chunk size: " << parser.getChunkSize() << '\n';
     oss << "Audio format: " << parser.getAudioFormat() << '\n';
@@ -61,7 +60,7 @@ std::string formatMetadataText(const Parser& parser) {
     return oss.str();
 }
 
-std::string renderWaveformASCII(const std::vector<int16_t>& audioData, int width, int height) {
+std::string renderWaveformASCII(const std::vector<int16_t> &audioData, int width, int height) {
     if (audioData.empty()) {
         return "(no audio data)";
     }
@@ -70,13 +69,15 @@ std::string renderWaveformASCII(const std::vector<int16_t>& audioData, int width
     const int16_t minSample = *std::min_element(audioData.begin(), audioData.end());
     const int range = std::max<int>(1, maxSample - minSample);
 
-    std::vector<std::string> rows(static_cast<size_t>(height), std::string(static_cast<size_t>(width), ' '));
+    std::vector<std::string> rows(static_cast<size_t>(height),
+                                  std::string(static_cast<size_t>(width), ' '));
     const int mid = height / 2;
     int prevY = mid;
 
     const std::size_t lastIdx = audioData.size() > 0 ? audioData.size() - 1 : 0;
     for (int i = 0; i < width; ++i) {
-        const std::size_t index = static_cast<std::size_t>((static_cast<double>(i) / std::max(1, width - 1)) * lastIdx);
+        const std::size_t index =
+            static_cast<std::size_t>((static_cast<double>(i) / std::max(1, width - 1)) * lastIdx);
         const int sample = audioData[index];
 
         int y = mid + (sample - minSample) * (height - 1) / range - mid;
@@ -95,7 +96,7 @@ std::string renderWaveformASCII(const std::vector<int16_t>& audioData, int width
     }
 
     std::ostringstream oss;
-    for (const auto& line : rows) {
+    for (const auto &line : rows) {
         oss << line << '\n';
     }
     return oss.str();

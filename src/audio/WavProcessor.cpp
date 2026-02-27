@@ -1,19 +1,19 @@
-#include "WavProcessor.hpp"
+#include "audio/WavProcessor.hpp"
 
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
 
-#include "GainProcessor.hpp"
-#include "WindowFunctions.hpp"
-#include "FFTProcessor.hpp"
+#include "audio/GainProcessor.hpp"
+#include "audio/WindowFunctions.hpp"
+#include "audio/FFTProcessor.hpp"
 
 namespace fs = std::filesystem;
 
 namespace {
 
-std::string makeOutputPath(const std::string& inputPath, const std::string& customPath) {
+std::string makeOutputPath(const std::string &inputPath, const std::string &customPath) {
     if (!customPath.empty()) {
         return customPath;
     }
@@ -30,7 +30,8 @@ std::string makeOutputPath(const std::string& inputPath, const std::string& cust
     return out.string();
 }
 
-void writeWavFile(const Parser& parser, const std::vector<int16_t>& samples, const std::string& outputPath) {
+void writeWavFile(const Parser &parser, const std::vector<int16_t> &samples,
+                  const std::string &outputPath) {
     if (parser.getBitsPerSample() != 16) {
         throw std::runtime_error("Only 16-bit PCM WAV is supported for writing");
     }
@@ -44,35 +45,37 @@ void writeWavFile(const Parser& parser, const std::vector<int16_t>& samples, con
     const uint32_t chunkSize = 36 + subchunk2Size; // PCM fmt chunk (16 bytes) + data
 
     out.write("RIFF", 4);
-    out.write(reinterpret_cast<const char*>(&chunkSize), sizeof(chunkSize));
+    out.write(reinterpret_cast<const char *>(&chunkSize), sizeof(chunkSize));
     out.write("WAVE", 4);
 
     // fmt chunk
     const uint32_t subchunk1Size = parser.getSubchunk1Size();
     out.write("fmt ", 4);
-    out.write(reinterpret_cast<const char*>(&subchunk1Size), sizeof(subchunk1Size));
+    out.write(reinterpret_cast<const char *>(&subchunk1Size), sizeof(subchunk1Size));
     const uint16_t audioFormat = parser.getAudioFormat();
     const uint16_t numChannels = parser.getNumChannels();
     const uint32_t sampleRate = parser.getSampleRate();
     const uint32_t byteRate = parser.getByteRate();
     const uint16_t blockAlign = parser.getBlockAlign();
     const uint16_t bitsPerSample = parser.getBitsPerSample();
-    out.write(reinterpret_cast<const char*>(&audioFormat), sizeof(audioFormat));
-    out.write(reinterpret_cast<const char*>(&numChannels), sizeof(numChannels));
-    out.write(reinterpret_cast<const char*>(&sampleRate), sizeof(sampleRate));
-    out.write(reinterpret_cast<const char*>(&byteRate), sizeof(byteRate));
-    out.write(reinterpret_cast<const char*>(&blockAlign), sizeof(blockAlign));
-    out.write(reinterpret_cast<const char*>(&bitsPerSample), sizeof(bitsPerSample));
+    out.write(reinterpret_cast<const char *>(&audioFormat), sizeof(audioFormat));
+    out.write(reinterpret_cast<const char *>(&numChannels), sizeof(numChannels));
+    out.write(reinterpret_cast<const char *>(&sampleRate), sizeof(sampleRate));
+    out.write(reinterpret_cast<const char *>(&byteRate), sizeof(byteRate));
+    out.write(reinterpret_cast<const char *>(&blockAlign), sizeof(blockAlign));
+    out.write(reinterpret_cast<const char *>(&bitsPerSample), sizeof(bitsPerSample));
 
     // data chunk
     out.write("data", 4);
-    out.write(reinterpret_cast<const char*>(&subchunk2Size), sizeof(subchunk2Size));
-    out.write(reinterpret_cast<const char*>(samples.data()), static_cast<std::streamsize>(samples.size() * sizeof(int16_t)));
+    out.write(reinterpret_cast<const char *>(&subchunk2Size), sizeof(subchunk2Size));
+    out.write(reinterpret_cast<const char *>(samples.data()),
+              static_cast<std::streamsize>(samples.size() * sizeof(int16_t)));
 }
 
 } // namespace
 
-ProcessedWav processWavFile(const std::string& inputPath, double gain, const std::string& outputPath) {
+ProcessedWav processWavFile(const std::string &inputPath, double gain,
+                            const std::string &outputPath) {
     Parser parser;
     std::ifstream file(inputPath, std::ios::binary);
     if (!file.is_open()) {
@@ -103,15 +106,18 @@ ProcessedWav processWavFile(const std::string& inputPath, double gain, const std
     const uint16_t numChannels = parser.getNumChannels();
     if (numChannels > 0 && !result.processedSamples.empty()) {
         const size_t totalFrames = result.processedSamples.size() / numChannels;
-        const size_t framesToProcess = std::min<size_t>(totalFrames, 2048); // keep O(N^2) manageable
+        const size_t framesToProcess =
+            std::min<size_t>(totalFrames, 2048); // keep O(N^2) manageable
 
         if (framesToProcess > 1) {
-            const std::vector<double> window = WindowFunctions::generate(WindowFunctions::Type::Hann, framesToProcess);
+            const std::vector<double> window =
+                WindowFunctions::generate(WindowFunctions::Type::Hann, framesToProcess);
 
             auto processChannelBlock = [&](uint16_t channel) {
                 std::vector<double> block(framesToProcess);
                 for (size_t i = 0; i < framesToProcess; ++i) {
-                    block[i] = static_cast<double>(result.processedSamples[i * numChannels + channel]);
+                    block[i] =
+                        static_cast<double>(result.processedSamples[i * numChannels + channel]);
                 }
 
                 WindowFunctions::apply(block, window);
@@ -128,7 +134,8 @@ ProcessedWav processWavFile(const std::string& inputPath, double gain, const std
                 constexpr int maxVal = std::numeric_limits<int16_t>::max();
                 for (size_t i = 0; i < framesToProcess; ++i) {
                     const int rounded = static_cast<int>(std::lround(reconstructed[i]));
-                    result.processedSamples[i * numChannels + channel] = static_cast<int16_t>(std::clamp(rounded, minVal, maxVal));
+                    result.processedSamples[i * numChannels + channel] =
+                        static_cast<int16_t>(std::clamp(rounded, minVal, maxVal));
                 }
 
                 // Record metadata once (same for all channels)

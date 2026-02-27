@@ -1,9 +1,9 @@
 /**
  * JavaScript test for gain processing
- * Run with: node test-gain.js
+ * Run with: node tests/js/test-gain.js
  */
 
-const dissonanceCore = require('./build/Release/dissonance_core.node');
+const dissonanceCore = require('../../build/Release/dissonance_core.node');
 const fs = require('fs');
 const path = require('path');
 

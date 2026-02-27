@@ -5,13 +5,13 @@
 #include <vector>
 
 class GainProcessor {
-public:
+  public:
     explicit GainProcessor(double gain) : gain_(gain) {}
 
-    void apply(std::vector<int16_t>& samples) const;
+    void apply(std::vector<int16_t> &samples) const;
     [[nodiscard]] double gain() const { return gain_; }
 
-private:
+  private:
     double gain_;
 };
 

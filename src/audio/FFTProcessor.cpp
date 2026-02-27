@@ -1,9 +1,10 @@
-#include "FFTProcessor.hpp"
+#include "audio/FFTProcessor.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
-std::vector<std::complex<double>> FFTProcessor::fft(const std::vector<double>& input) {
+std::vector<std::complex<double>> FFTProcessor::fft(const std::vector<double> &input) {
     if (input.empty()) {
         throw std::invalid_argument("FFT input cannot be empty");
     }
@@ -27,7 +28,7 @@ std::vector<std::complex<double>> FFTProcessor::fft(const std::vector<double>& i
     return output;
 }
 
-std::vector<double> FFTProcessor::ifft(const std::vector<std::complex<double>>& spectrum) {
+std::vector<double> FFTProcessor::ifft(const std::vector<std::complex<double>> &spectrum) {
     if (spectrum.empty()) {
         throw std::invalid_argument("iFFT input cannot be empty");
     }
@@ -51,11 +52,9 @@ std::vector<double> FFTProcessor::ifft(const std::vector<std::complex<double>>& 
     return output;
 }
 
-std::vector<double> FFTProcessor::magnitude(const std::vector<std::complex<double>>& spectrum) {
-    std::vector<double> mags;
-    mags.reserve(spectrum.size());
-    for (const auto& c : spectrum) {
-        mags.push_back(std::abs(c));
-    }
+std::vector<double> FFTProcessor::magnitude(const std::vector<std::complex<double>> &spectrum) {
+    std::vector<double> mags(spectrum.size());
+    std::transform(spectrum.begin(), spectrum.end(), mags.begin(),
+                   [](const std::complex<double> &value) { return std::abs(value); });
     return mags;
 }
