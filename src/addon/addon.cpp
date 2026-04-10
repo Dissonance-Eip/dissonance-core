@@ -6,6 +6,7 @@
 #include "audio/WavProcessor.hpp"
 #include "audio/WindowFunctions.hpp"
 #include "audio/FFTProcessor.hpp"
+#include "utils/WavUtils.hpp"
 
 namespace {
 
@@ -225,8 +226,59 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
     }
 }
 
+Napi::Value Inspect(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsString()) {
+        throw Napi::TypeError::New(env, "Input path must be a string");
+    }
+
+    const std::string inputPath = info[0].As<Napi::String>();
+
+    try {
+        Parser parser;
+        std::ifstream file(inputPath, std::ios::binary);
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open file: " + inputPath);
+        }
+
+        // Fast path: parse header/chunks; skip reading full audio samples.
+        parser.readFromFile(file, false);
+
+        Napi::Object listTags = Napi::Object::New(env);
+        if (auto it = parser.getOtherChunks().find("LIST"); it != parser.getOtherChunks().end()) {
+            const ListTags tags = parseListChunk(it->second);
+            listTags.Set("title", Napi::String::New(env, tags.title));
+            listTags.Set("artist", Napi::String::New(env, tags.artist));
+            listTags.Set("comment", Napi::String::New(env, tags.comment));
+            listTags.Set("date", Napi::String::New(env, tags.date));
+            listTags.Set("software", Napi::String::New(env, tags.software));
+            listTags.Set("genre", Napi::String::New(env, tags.genre));
+            listTags.Set("copyright", Napi::String::New(env, tags.copyright));
+        } else {
+            listTags.Set("title", Napi::String::New(env, ""));
+            listTags.Set("artist", Napi::String::New(env, ""));
+            listTags.Set("comment", Napi::String::New(env, ""));
+            listTags.Set("date", Napi::String::New(env, ""));
+            listTags.Set("software", Napi::String::New(env, ""));
+            listTags.Set("genre", Napi::String::New(env, ""));
+            listTags.Set("copyright", Napi::String::New(env, ""));
+        }
+
+        Napi::Object result = Napi::Object::New(env);
+        result.Set("metadata", makeMetadataObject(env, parser));
+        result.Set("otherChunks", makeOtherChunks(env, parser));
+        result.Set("metadataText", Napi::String::New(env, formatMetadataText(parser)));
+        result.Set("listTags", listTags);
+        return result;
+    } catch (const std::exception &e) {
+        throw Napi::Error::New(env, e.what());
+    }
+}
+
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("process", Napi::Function::New(env, Process));
+    exports.Set("inspect", Napi::Function::New(env, Inspect));
     exports.Set("generateWindow", Napi::Function::New(env, GenerateWindow));
     exports.Set("applyWindow", Napi::Function::New(env, ApplyWindow));
     exports.Set("fft", Napi::Function::New(env, FFT));

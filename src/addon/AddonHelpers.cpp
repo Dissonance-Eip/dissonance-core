@@ -35,7 +35,22 @@ Napi::Object makeMetadataObject(Napi::Env env, const Parser &parser) {
     meta.Set("bitsPerSample", Napi::Number::New(env, parser.getBitsPerSample()));
     meta.Set("data", Napi::String::New(env, parser.getData()));
     meta.Set("subchunk2Size", Napi::Number::New(env, parser.getSubchunk2Size()));
-    meta.Set("numSamples", Napi::Number::New(env, parser.getAudioData().size()));
+
+    // `audioData` may be intentionally skipped for fast header inspection.
+    // Derive sample count from header sizes when possible.
+    const uint16_t bps = parser.getBitsPerSample();
+    const uint32_t dataBytes = parser.getSubchunk2Size();
+    uint32_t numSamples = 0;
+    if (bps > 0 && bps % 8 == 0) {
+        const uint32_t bytesPerSample = bps / 8;
+        if (bytesPerSample > 0) {
+            numSamples = dataBytes / bytesPerSample;
+        }
+    }
+    if (numSamples == 0) {
+        numSamples = static_cast<uint32_t>(parser.getAudioData().size());
+    }
+    meta.Set("numSamples", Napi::Number::New(env, numSamples));
     return meta;
 }
 
