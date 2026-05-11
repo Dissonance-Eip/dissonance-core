@@ -167,8 +167,7 @@ class Parser {
                             for (size_t i = 0; i < sampleCount; ++i) {
                                 const double s = static_cast<double>(buf[i]);
                                 const double clipped = std::clamp(s, -1.0, 1.0);
-                                const int scaled =
-                                    static_cast<int>(std::lround(clipped * 32767.0));
+                                const int scaled = static_cast<int>(std::lround(clipped * 32767.0));
                                 audioData[i] = clamp16(scaled);
                             }
                         }
@@ -182,8 +181,7 @@ class Parser {
                             audioData.resize(sampleCount);
                             for (size_t i = 0; i < sampleCount; ++i) {
                                 const double clipped = std::clamp(buf[i], -1.0, 1.0);
-                                const int scaled =
-                                    static_cast<int>(std::lround(clipped * 32767.0));
+                                const int scaled = static_cast<int>(std::lround(clipped * 32767.0));
                                 audioData[i] = clamp16(scaled);
                             }
                         }
