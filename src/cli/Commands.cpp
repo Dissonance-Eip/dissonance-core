@@ -120,8 +120,7 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
 
             window::apply(blockF, win);
 
-            std::vector<double> blockD(blockF.begin(), blockF.end());
-            auto mags = fft::magnitude(fft::transform(blockD));
+            auto mags = fft::magnitude(fft::transform(blockF));
 
             for (size_t k = 0; k < frameSize; ++k)
                 accumulated[k] += mags[k];
@@ -148,8 +147,7 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
 
         window::apply(blockF, win);
 
-        std::vector<double> blockD(blockF.begin(), blockF.end());
-        accumulated = fft::magnitude(fft::transform(blockD));
+        accumulated = fft::magnitude(fft::transform(blockF));
         accumulated.resize(frameSize, 0.0);
         windowCount = 1;
     }
