@@ -78,7 +78,7 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
     result.processedSamples = result.originalSamples;
 
     auto fftOwned = std::make_unique<WindowedFFTStage>(2048, 0.25f, opts.progressCallback);
-    WindowedFFTStage *fftStage = fftOwned.get();
+    const WindowedFFTStage *fftStage = fftOwned.get();
 
     Pipeline pipeline;
     pipeline.addStage(std::make_unique<GainStage>(opts.gain));
