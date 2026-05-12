@@ -14,15 +14,17 @@ FetchContent_Declare(
         kissfft_src
         GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
         GIT_TAG        master
+        SOURCE_SUBDIR  "_none_"
 )
-FetchContent_GetProperties(kissfft_src)
-if(NOT kissfft_src_POPULATED)
-    FetchContent_Populate(kissfft_src)
-endif()
+FetchContent_MakeAvailable(kissfft_src)
 
 add_library(kissfft STATIC ${kissfft_src_SOURCE_DIR}/kiss_fft.c)
 target_include_directories(kissfft PUBLIC ${kissfft_src_SOURCE_DIR})
 set_target_properties(kissfft PROPERTIES LINKER_LANGUAGE C)
+target_compile_options(kissfft PRIVATE
+        $<$<C_COMPILER_ID:MSVC>:/wd4267>
+        $<$<C_COMPILER_ID:GNU,Clang>:-w>
+)
 
 set(DISSONANCE_SOURCES
         src/utils/WavParser.cpp
