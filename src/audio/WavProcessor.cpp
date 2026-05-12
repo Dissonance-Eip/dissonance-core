@@ -4,10 +4,11 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 
-#include "audio/FFTProcessor.hpp"
-#include "audio/GainProcessor.hpp"
-#include "audio/WindowFunctions.hpp"
+#include "audio/GainStage.hpp"
+#include "audio/Pipeline.hpp"
+#include "audio/WindowedFFTStage.hpp"
 
 namespace fs = std::filesystem;
 
@@ -76,56 +77,17 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
     result.originalSamples = parser.getAudioData();
     result.processedSamples = result.originalSamples;
 
-    GainProcessor gainProcessor(opts.gain);
-    gainProcessor.apply(result.processedSamples);
+    Pipeline pipeline;
+    pipeline.addStage(std::make_unique<GainStage>(opts.gain));
 
-    const uint16_t numChannels = parser.getNumChannels();
-    if (numChannels > 0 && !result.processedSamples.empty()) {
-        constexpr size_t frameSize = 2048;
-        constexpr size_t hopSize = 1024;
-        constexpr size_t cutoff = frameSize / 4;
+    auto *fftStage = new WindowedFFTStage(2048, 0.25f, opts.progressCallback);
+    pipeline.addStage(std::unique_ptr<AudioStage>(fftStage));
 
-        const size_t totalFrames = result.processedSamples.size() / numChannels;
+    pipeline.run(result.processedSamples, parser.getNumChannels());
 
-        if (totalFrames >= 2) {
-            const std::vector<double> win = window::generate(window::Type::Hann, frameSize);
-
-            for (uint16_t ch = 0; ch < numChannels; ++ch) {
-                std::vector<float> output(totalFrames, 0.0f);
-                size_t hopIdx = 0;
-
-                for (size_t offset = 0; offset < totalFrames; offset += hopSize, ++hopIdx) {
-                    if (ch == 0 && opts.progressCallback && hopIdx % 16 == 0)
-                        opts.progressCallback(static_cast<float>(offset) /
-                                              static_cast<float>(totalFrames));
-
-                    std::vector<float> block(frameSize, 0.0f);
-                    const size_t available = std::min(frameSize, totalFrames - offset);
-                    for (size_t i = 0; i < available; ++i)
-                        block[i] = result.processedSamples[(offset + i) * numChannels + ch];
-
-                    window::apply(block, win);
-                    auto spectrum = fft::transform(block);
-
-                    for (size_t k = cutoff; k < spectrum.size(); ++k)
-                        spectrum[k] = {0.0, 0.0};
-
-                    auto reconstructed = fft::inverse(spectrum);
-                    for (size_t i = 0; i < frameSize && (offset + i) < totalFrames; ++i)
-                        output[offset + i] += static_cast<float>(reconstructed[i]);
-                }
-
-                for (size_t i = 0; i < totalFrames; ++i)
-                    result.processedSamples[i * numChannels + ch] =
-                        std::clamp(output[i], -1.0f, 1.0f);
-            }
-
-            if (opts.progressCallback)
-                opts.progressCallback(1.0f);
-
-            result.fftReport = {true, totalFrames, frameSize, cutoff};
-        }
-    }
+    if (fftStage->framesProcessed() > 0)
+        result.fftReport = {true, fftStage->framesProcessed(), fftStage->bins(),
+                            fftStage->cutoffBin()};
 
     result.processedPath = makeOutputPath(inputPath, opts.outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);
