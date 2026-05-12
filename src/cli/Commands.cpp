@@ -1,5 +1,5 @@
 #include "cli/Commands.hpp"
-#include "cli/WavGUI.hpp"
+#include "cli/ConsolePrinter.hpp"
 #include "audio/WavProcessor.hpp"
 #include "audio/FFTProcessor.hpp"
 #include "audio/WindowFunctions.hpp"
@@ -15,7 +15,11 @@ void Commands::printUsage(const char *programName) {
               << "Commands:\n"
               << "  info          Print WAV file metadata and waveform\n"
               << "  process       Apply gain and spectral processing\n"
-              << "  fft           Analyze FFT spectrum of first block\n"
+              << "  fft           Analyze FFT spectrum of a 512-frame block\n"
+              << "\nOptions for 'fft':\n"
+              << "  --offset <seconds>  Start offset into the file (default: 0)\n"
+              << "  --bins <n>          Number of frequency bins to display (default: 16)\n"
+              << "  --full              Average spectrum across entire file (Welch's method)\n"
               << "\nOptions for 'process':\n"
               << "  --gain <value>      Apply gain (default: 0.8)\n"
               << "  --output <path>     Output file path (default: <input>-processed.wav)\n"
@@ -26,14 +30,14 @@ void Commands::printUsage(const char *programName) {
 }
 
 int Commands::handleInfo(const std::string &inputPath) {
-    auto gui = std::make_shared<GUI>(inputPath);
-    if (gui->isValid()) {
+    auto printer = std::make_shared<ConsolePrinter>(inputPath);
+    if (printer->isValid()) {
         std::cout << "=== WAV File Information ===\n";
-        gui->printMetadata();
+        printer->printMetadata();
         std::cout << "\n=== Metadata Chunks ===\n";
-        gui->printOtherChunks();
+        printer->printOtherChunks();
         std::cout << "\n=== Waveform ===\n";
-        gui->printWaveform();
+        printer->printWaveform();
         return EXIT_SUCCESS;
     }
     throw dissonance::WavFormatError("WAV file invalid.");
@@ -64,49 +68,104 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
     return EXIT_SUCCESS;
 }
 
-int Commands::handleFft(const std::string &inputPath) {
-    std::ifstream file(inputPath, std::ios::binary);
-    if (!file.is_open()) {
-        throw dissonance::WavFormatError("Failed to open file: " + inputPath);
+int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int startIdx) {
+    double offsetSecs = 0.0;
+    size_t topBins = 16;
+    bool fullFile = false;
+
+    for (int i = startIdx; i < argc; ++i) {
+        if (std::string(argv[i]) == "--offset" && i + 1 < argc)
+            offsetSecs = std::stod(argv[++i]);
+        else if (std::string(argv[i]) == "--bins" && i + 1 < argc)
+            topBins = static_cast<size_t>(std::stoul(argv[++i]));
+        else if (std::string(argv[i]) == "--full")
+            fullFile = true;
     }
+
+    std::ifstream file(inputPath, std::ios::binary);
+    if (!file.is_open())
+        throw dissonance::WavFormatError("Failed to open file: " + inputPath);
     Parser parser = Parser::fromFile(file);
     file.close();
 
     const auto &samples = parser.getAudioData();
     const uint16_t numChannels = parser.getNumChannels();
+    const uint32_t sampleRate = parser.getSampleRate();
     const size_t totalFrames = samples.size() / numChannels;
-    const size_t framesToProcess = std::min<size_t>(totalFrames, 512);
 
-    if (framesToProcess < 2) {
-        throw dissonance::DspError("Not enough samples for FFT analysis");
-    }
+    constexpr size_t frameSize = 512;
+    constexpr size_t hopSize = 256;
 
-    const std::vector<double> win = window::generate(window::Type::Hann, framesToProcess);
+    const std::vector<double> win = window::generate(window::Type::Hann, frameSize);
 
     std::cout << "\n=== FFT Analysis ===\n";
     printField("Channels", std::to_string(numChannels));
-    printField("Sample rate", std::to_string(parser.getSampleRate()) + " Hz");
-    printField("Frames analyzed", std::to_string(framesToProcess));
-    std::cout << "\nFrequency resolution: "
-              << (static_cast<double>(parser.getSampleRate()) / framesToProcess) << " Hz/bin\n\n";
+    printField("Sample rate", std::to_string(sampleRate) + " Hz");
 
-    std::vector<float> blockF(framesToProcess);
-    for (size_t i = 0; i < framesToProcess; ++i)
-        blockF[i] = samples[i * numChannels];
+    std::vector<double> accumulated(frameSize, 0.0);
+    size_t windowCount = 0;
 
-    window::apply(blockF, win);
+    if (fullFile) {
+        if (totalFrames < frameSize)
+            throw dissonance::DspError("File too short for FFT analysis");
 
-    std::vector<double> blockD(blockF.begin(), blockF.end());
-    auto spectrum = fft::transform(blockD);
-    auto magnitudes = fft::magnitude(spectrum);
+        printField("Mode", "full file (averaged periodogram)");
+        printField("Window size", std::to_string(frameSize) + " frames");
+        printField("Hop size", std::to_string(hopSize) + " frames");
 
-    std::cout << "Top 16 frequency bins:\n";
+        for (size_t offset = 0; offset + frameSize <= totalFrames; offset += hopSize) {
+            std::vector<float> blockF(frameSize);
+            for (size_t i = 0; i < frameSize; ++i)
+                blockF[i] = samples[(offset + i) * numChannels];
+
+            window::apply(blockF, win);
+
+            std::vector<double> blockD(blockF.begin(), blockF.end());
+            auto mags = fft::magnitude(fft::transform(blockD));
+
+            for (size_t k = 0; k < frameSize; ++k)
+                accumulated[k] += mags[k];
+            ++windowCount;
+        }
+
+        printField("Windows averaged", std::to_string(windowCount));
+    } else {
+        const size_t offsetFrames =
+            std::min<size_t>(static_cast<size_t>(offsetSecs * sampleRate), totalFrames);
+        const size_t framesAvailable = totalFrames - offsetFrames;
+
+        if (framesAvailable < 2)
+            throw dissonance::DspError("Not enough samples for FFT analysis at this offset");
+
+        const size_t framesToProcess = std::min<size_t>(framesAvailable, frameSize);
+        printField("Offset",
+                   std::to_string(offsetSecs) + " s (frame " + std::to_string(offsetFrames) + ")");
+        printField("Frames analyzed", std::to_string(framesToProcess));
+
+        std::vector<float> blockF(framesToProcess);
+        for (size_t i = 0; i < framesToProcess; ++i)
+            blockF[i] = samples[(offsetFrames + i) * numChannels];
+
+        window::apply(blockF, win);
+
+        std::vector<double> blockD(blockF.begin(), blockF.end());
+        accumulated = fft::magnitude(fft::transform(blockD));
+        accumulated.resize(frameSize, 0.0);
+        windowCount = 1;
+    }
+
+    std::cout << "\nFrequency resolution: " << (static_cast<double>(sampleRate) / frameSize)
+              << " Hz/bin\n\n";
+
+    const size_t displayBins = std::min(topBins, frameSize / 2);
+    std::cout << "Top " << displayBins << " frequency bins:\n";
     std::cout << "Bin\tFreq (Hz)\tMagnitude\n";
     std::cout << "---\t---------\t---------\n";
 
-    for (size_t i = 0; i < std::min<size_t>(16, magnitudes.size() / 2); ++i) {
-        double freq = (static_cast<double>(i) * parser.getSampleRate()) / framesToProcess;
-        std::cout << i << "\t" << freq << "\t\t" << magnitudes[i] << "\n";
+    for (size_t i = 0; i < displayBins; ++i) {
+        double freq = (static_cast<double>(i) * sampleRate) / frameSize;
+        double mag = accumulated[i] / static_cast<double>(windowCount);
+        std::cout << i << "\t" << freq << "\t\t" << mag << "\n";
     }
 
     return EXIT_SUCCESS;
