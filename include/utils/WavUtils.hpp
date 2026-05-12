@@ -1,5 +1,4 @@
-#ifndef WAVUTILS_H
-#define WAVUTILS_H
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -23,4 +22,3 @@ std::string formatMetadataText(const Parser &parser);
 std::string renderWaveformASCII(const std::vector<int16_t> &audioData, int width = 200,
                                 int height = 30);
 
-#endif // WAVUTILS_H

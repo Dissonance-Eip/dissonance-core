@@ -3,6 +3,7 @@
 #include "audio/WavProcessor.hpp"
 #include "audio/FFTProcessor.hpp"
 #include "audio/WindowFunctions.hpp"
+#include "core/Errors.hpp"
 #include <iostream>
 #include <fstream>
 #include <memory>
@@ -35,7 +36,7 @@ int Commands::handleInfo(const std::string &inputPath) {
         gui->printWaveform();
         return EXIT_SUCCESS;
     }
-    throw std::runtime_error("WAV file invalid.");
+    throw dissonance::WavFormatError("WAV file invalid.");
 }
 
 int Commands::handleProcess(const std::string &inputPath, int argc, char **argv, int startIdx) {
@@ -68,7 +69,7 @@ int Commands::handleFft(const std::string &inputPath) {
     Parser parser;
     std::ifstream file(inputPath, std::ios::binary);
     if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file: " + inputPath);
+        throw dissonance::WavFormatError("Failed to open file: " + inputPath);
     }
     parser.readFromFile(file);
     file.close();
@@ -79,7 +80,7 @@ int Commands::handleFft(const std::string &inputPath) {
     const size_t framesToProcess = std::min<size_t>(totalFrames, 512);
 
     if (framesToProcess < 2) {
-        throw std::runtime_error("Not enough samples for FFT analysis");
+        throw dissonance::DspError("Not enough samples for FFT analysis");
     }
 
     const std::vector<double> window =

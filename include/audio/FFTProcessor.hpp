@@ -1,5 +1,4 @@
-#ifndef FFTPROCESSOR_HPP
-#define FFTPROCESSOR_HPP
+#pragma once
 
 #include <complex>
 #include <vector>
@@ -24,4 +23,3 @@ class FFTProcessor {
     static std::vector<double> magnitude(const std::vector<std::complex<double>> &spectrum);
 };
 
-#endif // FFTPROCESSOR_HPP

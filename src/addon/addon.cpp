@@ -7,6 +7,7 @@
 #include "audio/WindowFunctions.hpp"
 #include "audio/FFTProcessor.hpp"
 #include "utils/WavUtils.hpp"
+#include "core/Errors.hpp"
 
 namespace {
 
@@ -239,7 +240,7 @@ Napi::Value Inspect(const Napi::CallbackInfo &info) {
         Parser parser;
         std::ifstream file(inputPath, std::ios::binary);
         if (!file.is_open()) {
-            throw std::runtime_error("Failed to open file: " + inputPath);
+            throw dissonance::WavFormatError("Failed to open file: " + inputPath);
         }
 
         // Fast path: parse header/chunks; skip reading full audio samples.

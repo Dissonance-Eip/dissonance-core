@@ -1,5 +1,4 @@
-#ifndef WAVPARSER_H
-#define WAVPARSER_H
+#pragma once
 
 #include <cstdint>
 #include <algorithm>
@@ -12,13 +11,15 @@
 #include <vector>
 #include <unordered_map>
 
+#include "core/Errors.hpp"
+
 class Parser {
   public:
     Parser() = default;
 
     void readFromFile(std::ifstream &file, bool readAudioData = true) {
         if (!file.is_open()) {
-            throw std::runtime_error("File not open");
+            throw dissonance::WavFormatError("File not open");
         }
 
         readString(file, riff, 4);
@@ -26,7 +27,7 @@ class Parser {
         readString(file, wave, 4);
 
         if (riff != "RIFF" || wave != "WAVE") {
-            throw std::runtime_error("Not a valid RIFF/WAVE file");
+            throw dissonance::WavFormatError("Not a valid RIFF/WAVE file");
         }
 
         auto skipPaddingByteIfNeeded = [&](uint32_t size) {
@@ -66,7 +67,7 @@ class Parser {
 
             if (chunkId == "data") {
                 if (!sawFmt) {
-                    throw std::runtime_error("WAV missing fmt chunk before data");
+                    throw dissonance::WavFormatError("WAV missing fmt chunk before data");
                 }
 
                 data = chunkId;
@@ -74,11 +75,11 @@ class Parser {
 
                 const uint16_t bytesPerSample = static_cast<uint16_t>(bitsPerSample / 8);
                 if (bytesPerSample == 0) {
-                    throw std::runtime_error("Invalid bitsPerSample in WAV header");
+                    throw dissonance::WavFormatError("Invalid bitsPerSample in WAV header");
                 }
 
                 if (currentChunkSize % bytesPerSample != 0) {
-                    throw std::runtime_error("Corrupt WAV data chunk size");
+                    throw dissonance::WavFormatError("Corrupt WAV data chunk size");
                 }
 
                 const size_t sampleCount = static_cast<size_t>(currentChunkSize / bytesPerSample);
@@ -101,7 +102,7 @@ class Parser {
                         if (readAudioData) {
                             if (!file.read(reinterpret_cast<char *>(audioData.data()),
                                            static_cast<std::streamsize>(currentChunkSize))) {
-                                throw std::runtime_error("Failed to read audio data");
+                                throw dissonance::WavFormatError("Failed to read audio data");
                             }
                         } else {
                             file.seekg(static_cast<std::streamoff>(currentChunkSize),
@@ -111,7 +112,7 @@ class Parser {
                         std::vector<uint8_t> buf(currentChunkSize);
                         if (!file.read(reinterpret_cast<char *>(buf.data()),
                                        static_cast<std::streamsize>(currentChunkSize))) {
-                            throw std::runtime_error("Failed to read audio data");
+                            throw dissonance::WavFormatError("Failed to read audio data");
                         }
                         if (readAudioData) {
                             audioData.resize(sampleCount);
@@ -124,7 +125,7 @@ class Parser {
                         std::vector<uint8_t> buf(currentChunkSize);
                         if (!file.read(reinterpret_cast<char *>(buf.data()),
                                        static_cast<std::streamsize>(currentChunkSize))) {
-                            throw std::runtime_error("Failed to read audio data");
+                            throw dissonance::WavFormatError("Failed to read audio data");
                         }
                         if (readAudioData) {
                             audioData.resize(sampleCount);
@@ -142,7 +143,7 @@ class Parser {
                         std::vector<int32_t> buf(sampleCount);
                         if (!file.read(reinterpret_cast<char *>(buf.data()),
                                        static_cast<std::streamsize>(currentChunkSize))) {
-                            throw std::runtime_error("Failed to read audio data");
+                            throw dissonance::WavFormatError("Failed to read audio data");
                         }
                         if (readAudioData) {
                             audioData.resize(sampleCount);
@@ -151,8 +152,8 @@ class Parser {
                             }
                         }
                     } else {
-                        throw std::runtime_error("Unsupported PCM bitsPerSample: " +
-                                                 std::to_string(bitsPerSample));
+                        throw dissonance::WavFormatError("Unsupported PCM bitsPerSample: " +
+                                                         std::to_string(bitsPerSample));
                     }
                 } else if (audioFormat == 3) {
                     // IEEE float
@@ -160,7 +161,7 @@ class Parser {
                         std::vector<float> buf(sampleCount);
                         if (!file.read(reinterpret_cast<char *>(buf.data()),
                                        static_cast<std::streamsize>(currentChunkSize))) {
-                            throw std::runtime_error("Failed to read audio data");
+                            throw dissonance::WavFormatError("Failed to read audio data");
                         }
                         if (readAudioData) {
                             audioData.resize(sampleCount);
@@ -175,7 +176,7 @@ class Parser {
                         std::vector<double> buf(sampleCount);
                         if (!file.read(reinterpret_cast<char *>(buf.data()),
                                        static_cast<std::streamsize>(currentChunkSize))) {
-                            throw std::runtime_error("Failed to read audio data");
+                            throw dissonance::WavFormatError("Failed to read audio data");
                         }
                         if (readAudioData) {
                             audioData.resize(sampleCount);
@@ -186,12 +187,12 @@ class Parser {
                             }
                         }
                     } else {
-                        throw std::runtime_error("Unsupported float bitsPerSample: " +
-                                                 std::to_string(bitsPerSample));
+                        throw dissonance::WavFormatError("Unsupported float bitsPerSample: " +
+                                                         std::to_string(bitsPerSample));
                     }
                 } else {
-                    throw std::runtime_error("Unsupported WAV audioFormat: " +
-                                             std::to_string(audioFormat));
+                    throw dissonance::WavFormatError("Unsupported WAV audioFormat: " +
+                                                     std::to_string(audioFormat));
                 }
 
                 skipPaddingByteIfNeeded(currentChunkSize);
@@ -201,7 +202,7 @@ class Parser {
             // Any other chunk
             std::vector<char> chunkData(currentChunkSize);
             if (!file.read(chunkData.data(), static_cast<std::streamsize>(currentChunkSize))) {
-                throw std::runtime_error("Failed to read chunk data");
+                throw dissonance::WavFormatError("Failed to read chunk data");
             }
             otherChunks[chunkId] = std::move(chunkData);
             skipPaddingByteIfNeeded(currentChunkSize);
@@ -231,13 +232,13 @@ class Parser {
     static void readString(std::ifstream &file, std::string &field, const size_t size) {
         field.resize(size);
         if (!file.read(&field[0], static_cast<std::streamsize>(size))) {
-            throw std::runtime_error("Failed to read string field");
+            throw dissonance::WavFormatError("Failed to read string field");
         }
     }
 
     template <typename T> static void readData(std::ifstream &file, T &field) {
         if (!file.read(reinterpret_cast<char *>(&field), sizeof(field))) {
-            throw std::runtime_error("Failed to read data field");
+            throw dissonance::WavFormatError("Failed to read data field");
         }
     }
 
@@ -258,4 +259,3 @@ class Parser {
     std::unordered_map<std::string, std::vector<char>> otherChunks; // Other chunks (e.g., "LIST")
 };
 
-#endif // WAVPARSER_H

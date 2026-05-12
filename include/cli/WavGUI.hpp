@@ -1,9 +1,4 @@
-//
-// Created by noe on 16/03/2025.
-//
-
-#ifndef WAVGUI_H
-#define WAVGUI_H
+#pragma once
 
 #include <memory>
 #include <string>
@@ -46,4 +41,3 @@ class GUI {
     mutable std::string copyright;
 };
 
-#endif // WAVGUI_H

@@ -1,5 +1,4 @@
-#ifndef GAINPROCESSOR_HPP
-#define GAINPROCESSOR_HPP
+#pragma once
 
 #include <cstdint>
 #include <vector>
@@ -15,4 +14,3 @@ class GainProcessor {
     double gain_;
 };
 
-#endif // GAINPROCESSOR_HPP

@@ -1,5 +1,4 @@
-#ifndef WINDOWFUNCTIONS_HPP
-#define WINDOWFUNCTIONS_HPP
+#pragma once
 
 #include <vector>
 #include <cstddef>
@@ -36,4 +35,3 @@ class WindowFunctions {
     static std::vector<double> generateHamming(size_t size);
 };
 
-#endif // WINDOWFUNCTIONS_HPP

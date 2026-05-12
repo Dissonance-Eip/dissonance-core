@@ -1,5 +1,4 @@
-#ifndef WAVPROCESSOR_H
-#define WAVPROCESSOR_H
+#pragma once
 
 #include <cstdint>
 #include <string>
@@ -27,4 +26,3 @@ struct ProcessedWav {
 ProcessedWav processWavFile(const std::string &inputPath, double gain = 0.8,
                             const std::string &outputPath = "");
 
-#endif // WAVPROCESSOR_H

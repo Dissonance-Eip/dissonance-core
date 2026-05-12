@@ -1,4 +1,5 @@
 #include "audio/WindowFunctions.hpp"
+#include "core/Errors.hpp"
 
 #include <cmath>
 #include <stdexcept>
@@ -11,7 +12,7 @@
 
 std::vector<double> WindowFunctions::generate(Type type, size_t size) {
     if (size == 0) {
-        throw std::invalid_argument("Window size must be greater than 0");
+        throw dissonance::DspError("Window size must be greater than 0");
     }
 
     switch (type) {
@@ -20,7 +21,7 @@ std::vector<double> WindowFunctions::generate(Type type, size_t size) {
     case Type::Hamming:
         return generateHamming(size);
     default:
-        throw std::invalid_argument("Unknown window type");
+        throw dissonance::DspError("Unknown window type");
     }
 }
 
@@ -61,7 +62,7 @@ std::vector<double> WindowFunctions::generateHamming(size_t size) {
 
 void WindowFunctions::apply(std::vector<double> &samples, const std::vector<double> &window) {
     if (samples.size() != window.size()) {
-        throw std::invalid_argument("Sample buffer size must match window size");
+        throw dissonance::DspError("Sample buffer size must match window size");
     }
 
     for (size_t i = 0; i < samples.size(); ++i) {
@@ -71,7 +72,7 @@ void WindowFunctions::apply(std::vector<double> &samples, const std::vector<doub
 
 void WindowFunctions::apply(std::vector<int16_t> &samples, const std::vector<double> &window) {
     if (samples.size() != window.size()) {
-        throw std::invalid_argument("Sample buffer size must match window size");
+        throw dissonance::DspError("Sample buffer size must match window size");
     }
 
     constexpr int minVal = std::numeric_limits<int16_t>::min();

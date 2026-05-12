@@ -1,4 +1,5 @@
 #include "audio/FFTProcessor.hpp"
+#include "core/Errors.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -6,7 +7,7 @@
 
 std::vector<std::complex<double>> FFTProcessor::fft(const std::vector<double> &input) {
     if (input.empty()) {
-        throw std::invalid_argument("FFT input cannot be empty");
+        throw dissonance::DspError("FFT input cannot be empty");
     }
 
     const size_t N = input.size();
@@ -30,7 +31,7 @@ std::vector<std::complex<double>> FFTProcessor::fft(const std::vector<double> &i
 
 std::vector<double> FFTProcessor::ifft(const std::vector<std::complex<double>> &spectrum) {
     if (spectrum.empty()) {
-        throw std::invalid_argument("iFFT input cannot be empty");
+        throw dissonance::DspError("iFFT input cannot be empty");
     }
 
     const size_t N = spectrum.size();

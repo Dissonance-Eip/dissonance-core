@@ -1,5 +1,4 @@
-#ifndef ADDONHELPERS_HPP
-#define ADDONHELPERS_HPP
+#pragma once
 
 #include <napi.h>
 #include <string>
@@ -11,4 +10,3 @@ std::string toHexPreview(const std::vector<char> &data, std::size_t maxBytes = 1
 Napi::Object makeMetadataObject(Napi::Env env, const Parser &parser);
 Napi::Array makeOtherChunks(Napi::Env env, const Parser &parser);
 
-#endif // ADDONHELPERS_HPP

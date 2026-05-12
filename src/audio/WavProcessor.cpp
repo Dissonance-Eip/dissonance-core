@@ -1,4 +1,5 @@
 #include "audio/WavProcessor.hpp"
+#include "core/Errors.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -34,7 +35,7 @@ void writeWavFile(const Parser &parser, const std::vector<int16_t> &samples,
                   const std::string &outputPath) {
     std::ofstream out(outputPath, std::ios::binary | std::ios::trunc);
     if (!out.is_open()) {
-        throw std::runtime_error("Failed to open output file: " + outputPath);
+        throw dissonance::WavFormatError("Failed to open output file: " + outputPath);
     }
 
     const uint32_t subchunk2Size = static_cast<uint32_t>(samples.size() * sizeof(int16_t));
@@ -75,7 +76,7 @@ ProcessedWav processWavFile(const std::string &inputPath, double gain,
     Parser parser;
     std::ifstream file(inputPath, std::ios::binary);
     if (!file.is_open()) {
-        throw std::runtime_error("Failed to open file: " + inputPath);
+        throw dissonance::WavFormatError("Failed to open file: " + inputPath);
     }
     parser.readFromFile(file);
 

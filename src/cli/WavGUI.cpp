@@ -4,6 +4,7 @@
 
 #include "cli/WavGUI.hpp"
 #include "utils/WavUtils.hpp"
+#include "core/Errors.hpp"
 
 #include <sstream>
 
@@ -29,7 +30,7 @@ GUI::GUI(const std::string &filename)
 
 void GUI::printMetadata() const {
     if (!valid) {
-        throw std::runtime_error("Failed to read file data");
+        throw dissonance::WavFormatError("Failed to read file data");
     }
     // Print formatted metadata with colors
     const std::string metadata = processed.metadataText;
@@ -51,14 +52,14 @@ void GUI::printAudioData() const {
         const auto &audioData = processed.originalSamples;
         std::ofstream outFile("../audio_data.bin", std::ios::binary);
         if (!outFile) {
-            throw std::runtime_error("Failed to open output file");
+            throw dissonance::WavFormatError("Failed to open output file");
         }
         outFile.write(reinterpret_cast<const char *>(audioData.data()),
                       audioData.size() * sizeof(int16_t));
         outFile.close();
         std::cout << "Audio data saved to audio_data.bin" << std::endl;
     } else {
-        throw std::runtime_error("Failed to read audio data");
+        throw dissonance::WavFormatError("Failed to read audio data");
     }
 }
 
@@ -84,7 +85,7 @@ void GUI::printOtherChunks() const {
             }
         }
     } else {
-        throw std::runtime_error("Failed to read other chunks");
+        throw dissonance::WavFormatError("Failed to read other chunks");
     }
 }
 
