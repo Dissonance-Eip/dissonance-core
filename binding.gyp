@@ -6,9 +6,11 @@
         "src/addon/addon.cpp",
         "src/addon/AddonHelpers.cpp",
         "src/utils/WavParser.cpp",
-        "src/audio/GainProcessor.cpp",
         "src/utils/WavUtils.cpp",
+        "src/audio/GainStage.cpp",
+        "src/audio/Pipeline.cpp",
         "src/audio/WavProcessor.cpp",
+        "src/audio/WindowedFFTStage.cpp",
         "src/audio/WindowFunctions.cpp",
         "src/audio/FFTProcessor.cpp",
         "vendor/kissfft/kiss_fft.c"
