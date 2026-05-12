@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.11)
 project(dissonance-core LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -10,10 +10,22 @@ option(BUILD_CLI "Build the CLI executable (requires WavGUI)" ON)
 set(DISSONANCE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 # -------------------------
-# KissFFT (vendored, plain C)
+# KissFFT — fetched at configure time for CMake builds.
+# (node-gyp builds use vendor/kissfft/ directly via binding.gyp)
 # -------------------------
-add_library(kissfft STATIC vendor/kissfft/kiss_fft.c)
-target_include_directories(kissfft PUBLIC vendor/kissfft)
+include(FetchContent)
+FetchContent_Declare(
+        kissfft_src
+        GIT_REPOSITORY https://github.com/mborgerding/kissfft.git
+        GIT_TAG        master
+)
+FetchContent_GetProperties(kissfft_src)
+if(NOT kissfft_src_POPULATED)
+    FetchContent_Populate(kissfft_src)
+endif()
+
+add_library(kissfft STATIC ${kissfft_src_SOURCE_DIR}/kiss_fft.c)
+target_include_directories(kissfft PUBLIC ${kissfft_src_SOURCE_DIR})
 set_target_properties(kissfft PROPERTIES LINKER_LANGUAGE C)
 
 set(DISSONANCE_AUDIO_SOURCES
