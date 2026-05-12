@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include <vector>
 #include <complex>
+#include <vector>
 
 #include "audio/FFTProcessor.hpp"
 #include "core/Errors.hpp"
