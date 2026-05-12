@@ -175,7 +175,7 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
     }
 
     auto deferred = Napi::Promise::Deferred::New(env);
-    auto *worker = new ProcessWorker(env, inputPath, std::move(opts), deferred);
+    auto worker = std::make_unique<ProcessWorker>(env, inputPath, std::move(opts), deferred);
 
     if (info.Length() >= 3 && info[2].IsFunction()) {
         auto tsfn = Napi::ThreadSafeFunction::New(env, info[2].As<Napi::Function>(),
@@ -183,7 +183,7 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
         worker->setProgressCallback(std::move(tsfn));
     }
 
-    worker->Queue();
+    worker.release()->Queue();
     return deferred.Promise();
 }
 
