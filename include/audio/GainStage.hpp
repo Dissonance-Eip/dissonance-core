@@ -8,5 +8,5 @@ class GainStage : public AudioStage {
     void process(std::vector<float> &samples, uint16_t numChannels) override;
 
   private:
-    double gain_;
+    float gain_;
 };

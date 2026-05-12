@@ -77,12 +77,12 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
     result.originalSamples = parser.getAudioData();
     result.processedSamples = result.originalSamples;
 
+    auto fftOwned = std::make_unique<WindowedFFTStage>(2048, 0.25f, opts.progressCallback);
+    WindowedFFTStage *fftStage = fftOwned.get();
+
     Pipeline pipeline;
     pipeline.addStage(std::make_unique<GainStage>(opts.gain));
-
-    auto *fftStage = new WindowedFFTStage(2048, 0.25f, opts.progressCallback);
-    pipeline.addStage(std::unique_ptr<AudioStage>(fftStage));
-
+    pipeline.addStage(std::move(fftOwned));
     pipeline.run(result.processedSamples, parser.getNumChannels());
 
     if (fftStage->framesProcessed() > 0)

@@ -22,6 +22,7 @@ class WindowedFFTStage : public AudioStage {
     size_t hopSize_;
     size_t cutoffBin_;
     std::vector<double> window_;
+    std::vector<float> block_;
     std::function<void(float)> progressCallback_;
     size_t framesProcessed_ = 0;
 };

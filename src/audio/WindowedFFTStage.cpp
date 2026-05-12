@@ -1,7 +1,6 @@
 #include "audio/WindowedFFTStage.hpp"
 
 #include <algorithm>
-#include <cstddef>
 
 #include "audio/FFTProcessor.hpp"
 #include "audio/WindowFunctions.hpp"
@@ -10,7 +9,7 @@ WindowedFFTStage::WindowedFFTStage(size_t frameSize, float cutoffFraction,
                                    std::function<void(float)> progressCallback)
     : frameSize_(frameSize), hopSize_(frameSize / 2),
       cutoffBin_(static_cast<size_t>(cutoffFraction * static_cast<float>(frameSize))),
-      window_(window::generate(window::Type::Hann, frameSize)),
+      window_(window::generate(window::Type::Hann, frameSize)), block_(frameSize, 0.0f),
       progressCallback_(std::move(progressCallback)) {}
 
 void WindowedFFTStage::process(std::vector<float> &samples, uint16_t numChannels) {
@@ -29,13 +28,13 @@ void WindowedFFTStage::process(std::vector<float> &samples, uint16_t numChannels
             if (ch == 0 && progressCallback_ && hopIdx % 16 == 0)
                 progressCallback_(static_cast<float>(offset) / static_cast<float>(totalFrames));
 
-            std::vector<float> block(frameSize_, 0.0f);
+            std::fill(block_.begin(), block_.end(), 0.0f);
             const size_t available = std::min(frameSize_, totalFrames - offset);
             for (size_t i = 0; i < available; ++i)
-                block[i] = samples[(offset + i) * numChannels + ch];
+                block_[i] = samples[(offset + i) * numChannels + ch];
 
-            window::apply(block, window_);
-            auto spectrum = fft::transform(block);
+            window::apply(block_, window_);
+            auto spectrum = fft::transform(block_);
 
             for (size_t k = cutoffBin_; k < spectrum.size(); ++k)
                 spectrum[k] = {0.0, 0.0};
