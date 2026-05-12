@@ -79,6 +79,54 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
     GainProcessor gainProcessor(opts.gain);
     gainProcessor.apply(result.processedSamples);
 
+    const uint16_t numChannels = parser.getNumChannels();
+    if (numChannels > 0 && !result.processedSamples.empty()) {
+        constexpr size_t frameSize = 2048;
+        constexpr size_t hopSize = 1024;
+        constexpr size_t cutoff = frameSize / 4;
+
+        const size_t totalFrames = result.processedSamples.size() / numChannels;
+
+        if (totalFrames >= 2) {
+            const std::vector<double> win = window::generate(window::Type::Hann, frameSize);
+
+            for (uint16_t ch = 0; ch < numChannels; ++ch) {
+                std::vector<float> output(totalFrames, 0.0f);
+                size_t hopIdx = 0;
+
+                for (size_t offset = 0; offset < totalFrames; offset += hopSize, ++hopIdx) {
+                    if (ch == 0 && opts.progressCallback && hopIdx % 16 == 0)
+                        opts.progressCallback(static_cast<float>(offset) /
+                                              static_cast<float>(totalFrames));
+
+                    std::vector<float> block(frameSize, 0.0f);
+                    const size_t available = std::min(frameSize, totalFrames - offset);
+                    for (size_t i = 0; i < available; ++i)
+                        block[i] = result.processedSamples[(offset + i) * numChannels + ch];
+
+                    window::apply(block, win);
+                    auto spectrum = fft::transform(block);
+
+                    for (size_t k = cutoff; k < spectrum.size(); ++k)
+                        spectrum[k] = {0.0, 0.0};
+
+                    auto reconstructed = fft::inverse(spectrum);
+                    for (size_t i = 0; i < frameSize && (offset + i) < totalFrames; ++i)
+                        output[offset + i] += static_cast<float>(reconstructed[i]);
+                }
+
+                for (size_t i = 0; i < totalFrames; ++i)
+                    result.processedSamples[i * numChannels + ch] =
+                        std::clamp(output[i], -1.0f, 1.0f);
+            }
+
+            if (opts.progressCallback)
+                opts.progressCallback(1.0f);
+
+            result.fftReport = {true, totalFrames, frameSize, cutoff};
+        }
+    }
+
     result.processedPath = makeOutputPath(inputPath, opts.outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);
 
@@ -87,37 +135,6 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
 
     if (auto it = result.otherChunks.find("LIST"); it != result.otherChunks.end())
         result.listTags = parseListChunk(it->second);
-
-    const uint16_t numChannels = parser.getNumChannels();
-    if (numChannels > 0 && !result.processedSamples.empty()) {
-        const size_t totalFrames = result.processedSamples.size() / numChannels;
-        const size_t framesToProcess = std::min<size_t>(totalFrames, 2048);
-
-        if (framesToProcess > 1) {
-            const std::vector<double> win = window::generate(window::Type::Hann, framesToProcess);
-
-            for (uint16_t ch = 0; ch < numChannels; ++ch) {
-                std::vector<float> block(framesToProcess);
-                for (size_t i = 0; i < framesToProcess; ++i)
-                    block[i] = result.processedSamples[i * numChannels + ch];
-
-                window::apply(block, win);
-
-                auto spectrum = fft::transform(block);
-
-                const size_t cutoff = spectrum.size() / 4;
-                for (size_t k = cutoff; k < spectrum.size(); ++k)
-                    spectrum[k] = {0.0, 0.0};
-
-                auto reconstructed = fft::inverse(spectrum);
-                for (size_t i = 0; i < framesToProcess; ++i)
-                    result.processedSamples[i * numChannels + ch] =
-                        std::clamp(static_cast<float>(reconstructed[i]), -1.0f, 1.0f);
-            }
-
-            result.fftReport = {true, framesToProcess, framesToProcess, framesToProcess / 4};
-        }
-    }
 
     return result;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -17,6 +18,7 @@ struct FFTReport {
 struct ProcessingOptions {
     double gain = 0.8;
     std::string outputPath;
+    std::function<void(float)> progressCallback;
 };
 
 struct ProcessedWav {
