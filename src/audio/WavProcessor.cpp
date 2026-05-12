@@ -63,7 +63,7 @@ void writeWavFile(const Parser &parser, const std::vector<float> &samples,
 
 } // namespace
 
-ProcessedWav processWavFile(const std::string &inputPath, ProcessingOptions opts) {
+ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOptions &opts) {
     std::ifstream file(inputPath, std::ios::binary);
     if (!file.is_open())
         throw dissonance::WavFormatError("Failed to open file: " + inputPath);

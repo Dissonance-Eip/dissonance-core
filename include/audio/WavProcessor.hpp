@@ -31,4 +31,4 @@ struct ProcessedWav {
     FFTReport fftReport;
 };
 
-ProcessedWav processWavFile(const std::string &inputPath, ProcessingOptions opts = {});
+ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOptions &opts = {});
