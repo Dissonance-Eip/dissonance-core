@@ -29,8 +29,10 @@ target_compile_options(kissfft PRIVATE
 set(DISSONANCE_SOURCES
         src/utils/WavParser.cpp
         src/utils/WavUtils.cpp
-        src/audio/GainProcessor.cpp
+        src/audio/GainStage.cpp
+        src/audio/Pipeline.cpp
         src/audio/WavProcessor.cpp
+        src/audio/WindowedFFTStage.cpp
         src/audio/WindowFunctions.cpp
         src/audio/FFTProcessor.cpp
 )
