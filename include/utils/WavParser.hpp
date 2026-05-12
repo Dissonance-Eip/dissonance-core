@@ -258,4 +258,3 @@ class Parser {
     std::vector<int16_t> audioData; // Audio data
     std::unordered_map<std::string, std::vector<char>> otherChunks; // Other chunks (e.g., "LIST")
 };
-

@@ -3,6 +3,7 @@
 #include <complex>
 
 #include "audio/FFTProcessor.hpp"
+#include "core/Errors.hpp"
 
 constexpr double EPS = 1e-6;
 
@@ -51,6 +52,6 @@ TEST(FFTProcessorTest, ThrowsOnEmptyInput) {
     std::vector<double> emptyReal;
     std::vector<std::complex<double>> emptyComplex;
 
-    EXPECT_THROW(FFTProcessor::fft(emptyReal), std::invalid_argument);
-    EXPECT_THROW(FFTProcessor::ifft(emptyComplex), std::invalid_argument);
+    EXPECT_THROW(FFTProcessor::fft(emptyReal), dissonance::DspError);
+    EXPECT_THROW(FFTProcessor::ifft(emptyComplex), dissonance::DspError);
 }

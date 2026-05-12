@@ -9,4 +9,3 @@
 std::string toHexPreview(const std::vector<char> &data, std::size_t maxBytes = 128);
 Napi::Object makeMetadataObject(Napi::Env env, const Parser &parser);
 Napi::Array makeOtherChunks(Napi::Env env, const Parser &parser);
-

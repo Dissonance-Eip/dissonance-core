@@ -40,4 +40,3 @@ class GUI {
     mutable std::string genre;
     mutable std::string copyright;
 };
-

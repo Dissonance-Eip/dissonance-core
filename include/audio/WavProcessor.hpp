@@ -25,4 +25,3 @@ struct ProcessedWav {
 
 ProcessedWav processWavFile(const std::string &inputPath, double gain = 0.8,
                             const std::string &outputPath = "");
-

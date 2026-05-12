@@ -13,4 +13,3 @@ class GainProcessor {
   private:
     double gain_;
 };
-

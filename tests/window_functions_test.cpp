@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "audio/WindowFunctions.hpp"
+#include "core/Errors.hpp"
 
 constexpr double EPSILON = 1e-6;
 
@@ -158,21 +159,21 @@ TEST_F(WindowFunctionsTest, ApplyWindowToInt16) {
 // Test error handling
 TEST_F(WindowFunctionsTest, InvalidWindowSize) {
     EXPECT_THROW(
-        { WindowFunctions::generate(WindowFunctions::Type::Hann, 0); }, std::invalid_argument);
+        { WindowFunctions::generate(WindowFunctions::Type::Hann, 0); }, dissonance::DspError);
 }
 
 TEST_F(WindowFunctionsTest, MismatchedSizesDouble) {
     std::vector<double> samples = {1.0, 2.0, 3.0, 4.0};
     std::vector<double> window = {0.5, 0.5, 0.5};
 
-    EXPECT_THROW({ WindowFunctions::apply(samples, window); }, std::invalid_argument);
+    EXPECT_THROW({ WindowFunctions::apply(samples, window); }, dissonance::DspError);
 }
 
 TEST_F(WindowFunctionsTest, MismatchedSizesInt16) {
     std::vector<int16_t> samples = {1, 2, 3, 4};
     std::vector<double> window = {0.5, 0.5, 0.5};
 
-    EXPECT_THROW({ WindowFunctions::apply(samples, window); }, std::invalid_argument);
+    EXPECT_THROW({ WindowFunctions::apply(samples, window); }, dissonance::DspError);
 }
 
 // Test clamping behavior for int16_t

@@ -21,4 +21,3 @@ ListTags parseListChunk(const std::vector<char> &value);
 std::string formatMetadataText(const Parser &parser);
 std::string renderWaveformASCII(const std::vector<int16_t> &audioData, int width = 200,
                                 int height = 30);
-

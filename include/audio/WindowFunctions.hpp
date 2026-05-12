@@ -34,4 +34,3 @@ class WindowFunctions {
     static std::vector<double> generateHann(size_t size);
     static std::vector<double> generateHamming(size_t size);
 };
-

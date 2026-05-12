@@ -22,4 +22,3 @@ class FFTProcessor {
      */
     static std::vector<double> magnitude(const std::vector<std::complex<double>> &spectrum);
 };
-
