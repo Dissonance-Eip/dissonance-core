@@ -2,7 +2,10 @@
 #define WAVPARSER_H
 
 #include <cstdint>
+#include <algorithm>
+#include <cmath>
 #include <fstream>
+#include <limits>
 #include <string>
 #include <stdexcept>
 #include <iostream>
@@ -13,7 +16,7 @@ class Parser {
   public:
     Parser() = default;
 
-    void readFromFile(std::ifstream &file) {
+    void readFromFile(std::ifstream &file, bool readAudioData = true) {
         if (!file.is_open()) {
             throw std::runtime_error("File not open");
         }
@@ -21,46 +24,187 @@ class Parser {
         readString(file, riff, 4);
         readData(file, chunkSize);
         readString(file, wave, 4);
-        readString(file, fmt, 4);
-        readData(file, subchunk1Size);
-        readData(file, audioFormat);
-        readData(file, numChannels);
-        readData(file, sampleRate);
-        readData(file, byteRate);
-        readData(file, blockAlign);
-        readData(file, bitsPerSample);
+
+        if (riff != "RIFF" || wave != "WAVE") {
+            throw std::runtime_error("Not a valid RIFF/WAVE file");
+        }
+
+        auto skipPaddingByteIfNeeded = [&](uint32_t size) {
+            if (size % 2 != 0) {
+                file.seekg(1, std::ios::cur);
+            }
+        };
+
+        bool sawFmt = false;
 
         while (true) {
-            readString(file, data, 4);
-            uint32_t currentChunkSize;
+            std::string chunkId;
+            readString(file, chunkId, 4);
+            uint32_t currentChunkSize = 0;
             readData(file, currentChunkSize);
 
-            if (data == "data") {
-                subchunk2Size = currentChunkSize;
-                audioData.resize(subchunk2Size);
+            if (chunkId == "fmt ") {
+                fmt = chunkId;
+                subchunk1Size = currentChunkSize;
 
-                if (bitsPerSample == 16) {
-                    std::vector<int16_t> tempData(subchunk2Size / 2);
-                    if (!file.read(reinterpret_cast<char *>(tempData.data()), subchunk2Size)) {
-                        throw std::runtime_error("Failed to read audio data");
-                    }
-                    audioData.assign(tempData.begin(), tempData.end());
+                // Base fmt (PCM) is 16 bytes.
+                readData(file, audioFormat);
+                readData(file, numChannels);
+                readData(file, sampleRate);
+                readData(file, byteRate);
+                readData(file, blockAlign);
+                readData(file, bitsPerSample);
+
+                if (currentChunkSize > 16) {
+                    file.seekg(static_cast<std::streamoff>(currentChunkSize - 16), std::ios::cur);
                 }
+
+                sawFmt = true;
+                skipPaddingByteIfNeeded(currentChunkSize);
+                continue;
+            }
+
+            if (chunkId == "data") {
+                if (!sawFmt) {
+                    throw std::runtime_error("WAV missing fmt chunk before data");
+                }
+
+                data = chunkId;
+                subchunk2Size = currentChunkSize;
+
+                const uint16_t bytesPerSample = static_cast<uint16_t>(bitsPerSample / 8);
+                if (bytesPerSample == 0) {
+                    throw std::runtime_error("Invalid bitsPerSample in WAV header");
+                }
+
+                if (currentChunkSize % bytesPerSample != 0) {
+                    throw std::runtime_error("Corrupt WAV data chunk size");
+                }
+
+                const size_t sampleCount = static_cast<size_t>(currentChunkSize / bytesPerSample);
+                audioData.clear();
+                if (readAudioData) {
+                    audioData.resize(sampleCount);
+                }
+
+                auto clamp16 = [](int value) {
+                    if (value < std::numeric_limits<int16_t>::min())
+                        return std::numeric_limits<int16_t>::min();
+                    if (value > std::numeric_limits<int16_t>::max())
+                        return std::numeric_limits<int16_t>::max();
+                    return static_cast<int16_t>(value);
+                };
+
+                if (audioFormat == 1) {
+                    // PCM
+                    if (bitsPerSample == 16) {
+                        if (readAudioData) {
+                            if (!file.read(reinterpret_cast<char *>(audioData.data()),
+                                           static_cast<std::streamsize>(currentChunkSize))) {
+                                throw std::runtime_error("Failed to read audio data");
+                            }
+                        } else {
+                            file.seekg(static_cast<std::streamoff>(currentChunkSize),
+                                       std::ios::cur);
+                        }
+                    } else if (bitsPerSample == 8) {
+                        std::vector<uint8_t> buf(currentChunkSize);
+                        if (!file.read(reinterpret_cast<char *>(buf.data()),
+                                       static_cast<std::streamsize>(currentChunkSize))) {
+                            throw std::runtime_error("Failed to read audio data");
+                        }
+                        if (readAudioData) {
+                            audioData.resize(sampleCount);
+                            for (size_t i = 0; i < sampleCount; ++i) {
+                                const int centered = static_cast<int>(buf[i]) - 128;
+                                audioData[i] = clamp16(centered << 8);
+                            }
+                        }
+                    } else if (bitsPerSample == 24) {
+                        std::vector<uint8_t> buf(currentChunkSize);
+                        if (!file.read(reinterpret_cast<char *>(buf.data()),
+                                       static_cast<std::streamsize>(currentChunkSize))) {
+                            throw std::runtime_error("Failed to read audio data");
+                        }
+                        if (readAudioData) {
+                            audioData.resize(sampleCount);
+                            for (size_t i = 0, o = 0; o < sampleCount; i += 3, ++o) {
+                                int32_t v = static_cast<int32_t>(buf[i]) |
+                                            (static_cast<int32_t>(buf[i + 1]) << 8) |
+                                            (static_cast<int32_t>(buf[i + 2]) << 16);
+                                if (v & 0x00800000) {
+                                    v |= ~0x00FFFFFF;
+                                }
+                                audioData[o] = clamp16(static_cast<int>(v >> 8));
+                            }
+                        }
+                    } else if (bitsPerSample == 32) {
+                        std::vector<int32_t> buf(sampleCount);
+                        if (!file.read(reinterpret_cast<char *>(buf.data()),
+                                       static_cast<std::streamsize>(currentChunkSize))) {
+                            throw std::runtime_error("Failed to read audio data");
+                        }
+                        if (readAudioData) {
+                            audioData.resize(sampleCount);
+                            for (size_t i = 0; i < sampleCount; ++i) {
+                                audioData[i] = clamp16(static_cast<int>(buf[i] >> 16));
+                            }
+                        }
+                    } else {
+                        throw std::runtime_error("Unsupported PCM bitsPerSample: " +
+                                                 std::to_string(bitsPerSample));
+                    }
+                } else if (audioFormat == 3) {
+                    // IEEE float
+                    if (bitsPerSample == 32) {
+                        std::vector<float> buf(sampleCount);
+                        if (!file.read(reinterpret_cast<char *>(buf.data()),
+                                       static_cast<std::streamsize>(currentChunkSize))) {
+                            throw std::runtime_error("Failed to read audio data");
+                        }
+                        if (readAudioData) {
+                            audioData.resize(sampleCount);
+                            for (size_t i = 0; i < sampleCount; ++i) {
+                                const double s = static_cast<double>(buf[i]);
+                                const double clipped = std::clamp(s, -1.0, 1.0);
+                                const int scaled = static_cast<int>(std::lround(clipped * 32767.0));
+                                audioData[i] = clamp16(scaled);
+                            }
+                        }
+                    } else if (bitsPerSample == 64) {
+                        std::vector<double> buf(sampleCount);
+                        if (!file.read(reinterpret_cast<char *>(buf.data()),
+                                       static_cast<std::streamsize>(currentChunkSize))) {
+                            throw std::runtime_error("Failed to read audio data");
+                        }
+                        if (readAudioData) {
+                            audioData.resize(sampleCount);
+                            for (size_t i = 0; i < sampleCount; ++i) {
+                                const double clipped = std::clamp(buf[i], -1.0, 1.0);
+                                const int scaled = static_cast<int>(std::lround(clipped * 32767.0));
+                                audioData[i] = clamp16(scaled);
+                            }
+                        }
+                    } else {
+                        throw std::runtime_error("Unsupported float bitsPerSample: " +
+                                                 std::to_string(bitsPerSample));
+                    }
+                } else {
+                    throw std::runtime_error("Unsupported WAV audioFormat: " +
+                                             std::to_string(audioFormat));
+                }
+
+                skipPaddingByteIfNeeded(currentChunkSize);
                 break;
             }
-            if (data == "LIST") {
-                std::vector<char> chunkData(currentChunkSize);
-                if (!file.read(chunkData.data(), currentChunkSize)) {
-                    throw std::runtime_error("Failed to read LIST chunk data");
-                }
-                otherChunks[data] = std::move(chunkData);
-            } else {
-                std::vector<char> chunkData(currentChunkSize);
-                if (!file.read(chunkData.data(), currentChunkSize)) {
-                    throw std::runtime_error("Failed to read chunk data");
-                }
-                otherChunks[data] = std::move(chunkData);
+
+            // Any other chunk
+            std::vector<char> chunkData(currentChunkSize);
+            if (!file.read(chunkData.data(), static_cast<std::streamsize>(currentChunkSize))) {
+                throw std::runtime_error("Failed to read chunk data");
             }
+            otherChunks[chunkId] = std::move(chunkData);
+            skipPaddingByteIfNeeded(currentChunkSize);
         }
     }
 

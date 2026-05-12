@@ -32,10 +32,6 @@ std::string makeOutputPath(const std::string &inputPath, const std::string &cust
 
 void writeWavFile(const Parser &parser, const std::vector<int16_t> &samples,
                   const std::string &outputPath) {
-    if (parser.getBitsPerSample() != 16) {
-        throw std::runtime_error("Only 16-bit PCM WAV is supported for writing");
-    }
-
     std::ofstream out(outputPath, std::ios::binary | std::ios::trunc);
     if (!out.is_open()) {
         throw std::runtime_error("Failed to open output file: " + outputPath);
@@ -48,16 +44,16 @@ void writeWavFile(const Parser &parser, const std::vector<int16_t> &samples,
     out.write(reinterpret_cast<const char *>(&chunkSize), sizeof(chunkSize));
     out.write("WAVE", 4);
 
-    // fmt chunk
-    const uint32_t subchunk1Size = parser.getSubchunk1Size();
+    // fmt chunk (always write canonical 16-bit PCM)
+    const uint32_t subchunk1Size = 16;
     out.write("fmt ", 4);
     out.write(reinterpret_cast<const char *>(&subchunk1Size), sizeof(subchunk1Size));
-    const uint16_t audioFormat = parser.getAudioFormat();
+    const uint16_t audioFormat = 1; // PCM
     const uint16_t numChannels = parser.getNumChannels();
     const uint32_t sampleRate = parser.getSampleRate();
-    const uint32_t byteRate = parser.getByteRate();
-    const uint16_t blockAlign = parser.getBlockAlign();
-    const uint16_t bitsPerSample = parser.getBitsPerSample();
+    const uint16_t bitsPerSample = 16;
+    const uint16_t blockAlign = static_cast<uint16_t>(numChannels * (bitsPerSample / 8));
+    const uint32_t byteRate = sampleRate * blockAlign;
     out.write(reinterpret_cast<const char *>(&audioFormat), sizeof(audioFormat));
     out.write(reinterpret_cast<const char *>(&numChannels), sizeof(numChannels));
     out.write(reinterpret_cast<const char *>(&sampleRate), sizeof(sampleRate));
