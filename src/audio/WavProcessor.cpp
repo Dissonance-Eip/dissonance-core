@@ -4,52 +4,42 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
-#include <stdexcept>
 
+#include "audio/FFTProcessor.hpp"
 #include "audio/GainProcessor.hpp"
 #include "audio/WindowFunctions.hpp"
-#include "audio/FFTProcessor.hpp"
 
 namespace fs = std::filesystem;
 
 namespace {
 
 std::string makeOutputPath(const std::string &inputPath, const std::string &customPath) {
-    if (!customPath.empty()) {
+    if (!customPath.empty())
         return customPath;
-    }
-
-    fs::path inPath(inputPath);
-    fs::path parent = inPath.parent_path();
-    std::string stem = inPath.stem().string();
-    std::string ext = inPath.extension().string();
-    if (ext.empty()) {
+    fs::path in(inputPath);
+    std::string ext = in.extension().string();
+    if (ext.empty())
         ext = ".wav";
-    }
-
-    fs::path out = parent / (stem + "-processed" + ext);
-    return out.string();
+    return (in.parent_path() / (in.stem().string() + "-processed" + ext)).string();
 }
 
-void writeWavFile(const Parser &parser, const std::vector<int16_t> &samples,
+void writeWavFile(const Parser &parser, const std::vector<float> &samples,
                   const std::string &outputPath) {
     std::ofstream out(outputPath, std::ios::binary | std::ios::trunc);
-    if (!out.is_open()) {
+    if (!out.is_open())
         throw dissonance::WavFormatError("Failed to open output file: " + outputPath);
-    }
 
     const uint32_t subchunk2Size = static_cast<uint32_t>(samples.size() * sizeof(int16_t));
-    const uint32_t chunkSize = 36 + subchunk2Size; // PCM fmt chunk (16 bytes) + data
+    const uint32_t chunkSize = 36 + subchunk2Size;
 
     out.write("RIFF", 4);
     out.write(reinterpret_cast<const char *>(&chunkSize), sizeof(chunkSize));
     out.write("WAVE", 4);
 
-    // fmt chunk (always write canonical 16-bit PCM)
     const uint32_t subchunk1Size = 16;
     out.write("fmt ", 4);
     out.write(reinterpret_cast<const char *>(&subchunk1Size), sizeof(subchunk1Size));
-    const uint16_t audioFormat = 1; // PCM
+    const uint16_t audioFormat = 1;
     const uint16_t numChannels = parser.getNumChannels();
     const uint32_t sampleRate = parser.getSampleRate();
     const uint16_t bitsPerSample = 16;
@@ -62,23 +52,23 @@ void writeWavFile(const Parser &parser, const std::vector<int16_t> &samples,
     out.write(reinterpret_cast<const char *>(&blockAlign), sizeof(blockAlign));
     out.write(reinterpret_cast<const char *>(&bitsPerSample), sizeof(bitsPerSample));
 
-    // data chunk
     out.write("data", 4);
     out.write(reinterpret_cast<const char *>(&subchunk2Size), sizeof(subchunk2Size));
-    out.write(reinterpret_cast<const char *>(samples.data()),
-              static_cast<std::streamsize>(samples.size() * sizeof(int16_t)));
+
+    for (float s : samples) {
+        const int16_t pcm = static_cast<int16_t>(std::clamp(s, -1.0f, 1.0f) * 32767.0f);
+        out.write(reinterpret_cast<const char *>(&pcm), sizeof(pcm));
+    }
 }
 
 } // namespace
 
-ProcessedWav processWavFile(const std::string &inputPath, double gain,
-                            const std::string &outputPath) {
-    Parser parser;
+ProcessedWav processWavFile(const std::string &inputPath, ProcessingOptions opts) {
     std::ifstream file(inputPath, std::ios::binary);
-    if (!file.is_open()) {
+    if (!file.is_open())
         throw dissonance::WavFormatError("Failed to open file: " + inputPath);
-    }
-    parser.readFromFile(file);
+
+    Parser parser = Parser::fromFile(file);
 
     ProcessedWav result;
     result.parser = parser;
@@ -86,65 +76,47 @@ ProcessedWav processWavFile(const std::string &inputPath, double gain,
     result.originalSamples = parser.getAudioData();
     result.processedSamples = result.originalSamples;
 
-    GainProcessor gainProcessor(gain);
+    GainProcessor gainProcessor(opts.gain);
     gainProcessor.apply(result.processedSamples);
 
-    result.processedPath = makeOutputPath(inputPath, outputPath);
+    result.processedPath = makeOutputPath(inputPath, opts.outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);
 
     result.metadataText = formatMetadataText(parser);
     result.waveformText = renderWaveformASCII(result.originalSamples);
 
-    if (auto it = result.otherChunks.find("LIST"); it != result.otherChunks.end()) {
+    if (auto it = result.otherChunks.find("LIST"); it != result.otherChunks.end())
         result.listTags = parseListChunk(it->second);
-    }
 
-    // Minimal spectral chain on the first block: window -> FFT -> zero high bins -> iFFT
     const uint16_t numChannels = parser.getNumChannels();
     if (numChannels > 0 && !result.processedSamples.empty()) {
         const size_t totalFrames = result.processedSamples.size() / numChannels;
-        const size_t framesToProcess =
-            std::min<size_t>(totalFrames, 2048); // keep O(N^2) manageable
+        const size_t framesToProcess = std::min<size_t>(totalFrames, 2048);
 
         if (framesToProcess > 1) {
-            const std::vector<double> window =
-                WindowFunctions::generate(WindowFunctions::Type::Hann, framesToProcess);
-
-            auto processChannelBlock = [&](uint16_t channel) {
-                std::vector<double> block(framesToProcess);
-                for (size_t i = 0; i < framesToProcess; ++i) {
-                    block[i] =
-                        static_cast<double>(result.processedSamples[i * numChannels + channel]);
-                }
-
-                WindowFunctions::apply(block, window);
-                auto spectrum = FFTProcessor::fft(block);
-
-                const size_t cutoff = spectrum.size() / 4; // crude low-pass
-                for (size_t k = cutoff; k < spectrum.size(); ++k) {
-                    spectrum[k] = {0.0, 0.0};
-                }
-
-                auto reconstructed = FFTProcessor::ifft(spectrum);
-
-                constexpr int minVal = std::numeric_limits<int16_t>::min();
-                constexpr int maxVal = std::numeric_limits<int16_t>::max();
-                for (size_t i = 0; i < framesToProcess; ++i) {
-                    const int rounded = static_cast<int>(std::lround(reconstructed[i]));
-                    result.processedSamples[i * numChannels + channel] =
-                        static_cast<int16_t>(std::clamp(rounded, minVal, maxVal));
-                }
-
-                // Record metadata once (same for all channels)
-                result.fftApplied = true;
-                result.fftFramesProcessed = framesToProcess;
-                result.fftBins = spectrum.size();
-                result.fftCutoffBin = cutoff;
-            };
+            const std::vector<double> win = window::generate(window::Type::Hann, framesToProcess);
 
             for (uint16_t ch = 0; ch < numChannels; ++ch) {
-                processChannelBlock(ch);
+                std::vector<float> block(framesToProcess);
+                for (size_t i = 0; i < framesToProcess; ++i)
+                    block[i] = result.processedSamples[i * numChannels + ch];
+
+                window::apply(block, win);
+
+                std::vector<double> blockD(block.begin(), block.end());
+                auto spectrum = fft::transform(blockD);
+
+                const size_t cutoff = spectrum.size() / 4;
+                for (size_t k = cutoff; k < spectrum.size(); ++k)
+                    spectrum[k] = {0.0, 0.0};
+
+                auto reconstructed = fft::inverse(spectrum);
+                for (size_t i = 0; i < framesToProcess; ++i)
+                    result.processedSamples[i * numChannels + ch] =
+                        std::clamp(static_cast<float>(reconstructed[i]), -1.0f, 1.0f);
             }
+
+            result.fftReport = {true, framesToProcess, framesToProcess, framesToProcess / 4};
         }
     }
 

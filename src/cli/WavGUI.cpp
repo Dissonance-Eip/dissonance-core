@@ -23,7 +23,7 @@ void printField(const std::string &label, const std::string &value) {
 }
 
 GUI::GUI(const std::string &filename)
-    : processed(processWavFile(filename, 0.8)), valid(true), filename(filename) {
+    : processed(processWavFile(filename)), valid(true), filename(filename) {
     std::cout << COLORS[0] << "Opening file: " << COLORS[3] << filename << COLORS[4] << std::endl;
     std::cout << COLORS[3] << "File opened successfully" << COLORS[4] << std::endl;
 }
@@ -55,7 +55,7 @@ void GUI::printAudioData() const {
             throw dissonance::WavFormatError("Failed to open output file");
         }
         outFile.write(reinterpret_cast<const char *>(audioData.data()),
-                      audioData.size() * sizeof(int16_t));
+                      audioData.size() * sizeof(float));
         outFile.close();
         std::cout << "Audio data saved to audio_data.bin" << std::endl;
     } else {

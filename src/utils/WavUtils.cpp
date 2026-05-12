@@ -60,14 +60,14 @@ std::string formatMetadataText(const Parser &parser) {
     return oss.str();
 }
 
-std::string renderWaveformASCII(const std::vector<int16_t> &audioData, int width, int height) {
+std::string renderWaveformASCII(const std::vector<float> &audioData, int width, int height) {
     if (audioData.empty()) {
         return "(no audio data)";
     }
 
-    const int16_t maxSample = *std::max_element(audioData.begin(), audioData.end());
-    const int16_t minSample = *std::min_element(audioData.begin(), audioData.end());
-    const int range = std::max<int>(1, maxSample - minSample);
+    const float maxSample = *std::max_element(audioData.begin(), audioData.end());
+    const float minSample = *std::min_element(audioData.begin(), audioData.end());
+    const float range = std::max(1e-6f, maxSample - minSample);
 
     std::vector<std::string> rows(static_cast<size_t>(height),
                                   std::string(static_cast<size_t>(width), ' '));
@@ -78,20 +78,16 @@ std::string renderWaveformASCII(const std::vector<int16_t> &audioData, int width
     for (int i = 0; i < width; ++i) {
         const std::size_t index =
             static_cast<std::size_t>((static_cast<double>(i) / std::max(1, width - 1)) * lastIdx);
-        const int sample = audioData[index];
+        const float sample = audioData[index];
 
-        int y = mid + (sample - minSample) * (height - 1) / range - mid;
+        int y = static_cast<int>((sample - minSample) / range * (height - 1));
+        y = std::clamp(y, 0, height - 1);
         y = std::clamp(y, 0, height - 1);
 
-        if (y != prevY) {
-            const int start = std::min(y, prevY);
-            const int end = std::max(y, prevY);
-            for (int j = start; j <= end; ++j) {
-                rows[static_cast<size_t>(j)][static_cast<size_t>(i)] = '|';
-            }
-        } else {
-            rows[static_cast<size_t>(y)][static_cast<size_t>(i)] = '|';
-        }
+        const int lo = std::min(y, prevY);
+        const int hi = std::max(y, prevY);
+        for (int j = lo; j <= hi; ++j)
+            rows[static_cast<size_t>(j)][static_cast<size_t>(i)] = '|';
         prevY = y;
     }
 

@@ -5,6 +5,7 @@
       "sources": [
         "src/addon/addon.cpp",
         "src/addon/AddonHelpers.cpp",
+        "src/utils/WavParser.cpp",
         "src/audio/GainProcessor.cpp",
         "src/utils/WavUtils.cpp",
         "src/audio/WavProcessor.cpp",

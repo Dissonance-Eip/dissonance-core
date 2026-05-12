@@ -40,38 +40,36 @@ int Commands::handleInfo(const std::string &inputPath) {
 }
 
 int Commands::handleProcess(const std::string &inputPath, int argc, char **argv, int startIdx) {
-    double gain = 0.8;
-    std::string outputPath = "";
+    ProcessingOptions opts;
 
     for (int i = startIdx; i < argc; ++i) {
         if (std::string(argv[i]) == "--gain" && i + 1 < argc) {
-            gain = std::stod(argv[++i]);
+            opts.gain = std::stod(argv[++i]);
         } else if (std::string(argv[i]) == "--output" && i + 1 < argc) {
-            outputPath = argv[++i];
+            opts.outputPath = argv[++i];
         }
     }
 
-    ProcessedWav result = processWavFile(inputPath, gain, outputPath);
+    ProcessedWav result = processWavFile(inputPath, opts);
 
     std::cout << "\n=== Processing Complete ===\n";
     printField("Output", result.processedPath);
-    printField("Gain applied", std::to_string(gain));
-    printField("FFT applied", result.fftApplied ? "yes" : "no");
-    if (result.fftApplied) {
-        printField("FFT frames", std::to_string(result.fftFramesProcessed));
-        printField("FFT bins", std::to_string(result.fftBins));
-        printField("Cutoff bin", std::to_string(result.fftCutoffBin));
+    printField("Gain applied", std::to_string(opts.gain));
+    printField("FFT applied", result.fftReport.applied ? "yes" : "no");
+    if (result.fftReport.applied) {
+        printField("FFT frames", std::to_string(result.fftReport.framesProcessed));
+        printField("FFT bins", std::to_string(result.fftReport.bins));
+        printField("Cutoff bin", std::to_string(result.fftReport.cutoffBin));
     }
     return EXIT_SUCCESS;
 }
 
 int Commands::handleFft(const std::string &inputPath) {
-    Parser parser;
     std::ifstream file(inputPath, std::ios::binary);
     if (!file.is_open()) {
         throw dissonance::WavFormatError("Failed to open file: " + inputPath);
     }
-    parser.readFromFile(file);
+    Parser parser = Parser::fromFile(file);
     file.close();
 
     const auto &samples = parser.getAudioData();
@@ -83,8 +81,7 @@ int Commands::handleFft(const std::string &inputPath) {
         throw dissonance::DspError("Not enough samples for FFT analysis");
     }
 
-    const std::vector<double> window =
-        WindowFunctions::generate(WindowFunctions::Type::Hann, framesToProcess);
+    const std::vector<double> win = window::generate(window::Type::Hann, framesToProcess);
 
     std::cout << "\n=== FFT Analysis ===\n";
     printField("Channels", std::to_string(numChannels));
@@ -93,14 +90,15 @@ int Commands::handleFft(const std::string &inputPath) {
     std::cout << "\nFrequency resolution: "
               << (static_cast<double>(parser.getSampleRate()) / framesToProcess) << " Hz/bin\n\n";
 
-    std::vector<double> block(framesToProcess);
-    for (size_t i = 0; i < framesToProcess; ++i) {
-        block[i] = static_cast<double>(samples[i * numChannels]);
-    }
+    std::vector<float> blockF(framesToProcess);
+    for (size_t i = 0; i < framesToProcess; ++i)
+        blockF[i] = samples[i * numChannels];
 
-    WindowFunctions::apply(block, window);
-    auto spectrum = FFTProcessor::fft(block);
-    auto magnitudes = FFTProcessor::magnitude(spectrum);
+    window::apply(blockF, win);
+
+    std::vector<double> blockD(blockF.begin(), blockF.end());
+    auto spectrum = fft::transform(blockD);
+    auto magnitudes = fft::magnitude(spectrum);
 
     std::cout << "Top 16 frequency bins:\n";
     std::cout << "Bin\tFreq (Hz)\tMagnitude\n";

@@ -10,6 +10,7 @@ option(BUILD_CLI "Build the CLI executable (requires WavGUI)" ON)
 set(DISSONANCE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
 
 set(DISSONANCE_AUDIO_SOURCES
+        src/utils/WavParser.cpp
         src/audio/GainProcessor.cpp
         src/utils/WavUtils.cpp
         src/audio/WavProcessor.cpp
