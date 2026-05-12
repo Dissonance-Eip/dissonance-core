@@ -16,8 +16,7 @@ namespace {
 // Float32Array helpers
 // ---------------------------------------------------------------------------
 
-std::vector<float> readFloat32Array(const Napi::CallbackInfo &info, uint32_t idx,
-                                    const char *ctx) {
+std::vector<float> readFloat32Array(const Napi::CallbackInfo &info, uint32_t idx, const char *ctx) {
     Napi::Env env = info.Env();
     if (idx >= info.Length() || !info[idx].IsTypedArray())
         throw Napi::TypeError::New(env, std::string(ctx) + " must be a Float32Array");
@@ -45,8 +44,7 @@ Napi::Float32Array makeFloat32ArrayFromDouble(Napi::Env env, const std::vector<d
     return arr;
 }
 
-Napi::Object makeSpectrumObject(Napi::Env env,
-                                const std::vector<std::complex<double>> &spectrum) {
+Napi::Object makeSpectrumObject(Napi::Env env, const std::vector<std::complex<double>> &spectrum) {
     Napi::Float32Array real = Napi::Float32Array::New(env, spectrum.size());
     Napi::Float32Array imag = Napi::Float32Array::New(env, spectrum.size());
     for (size_t i = 0; i < spectrum.size(); ++i) {
@@ -97,8 +95,7 @@ Napi::Object buildProcessResult(Napi::Env env, const ProcessedWav &processed) {
     result.Set("listTags", listTags);
     result.Set("processedPath", Napi::String::New(env, processed.processedPath));
     result.Set("fftApplied", Napi::Boolean::New(env, processed.fftReport.applied));
-    result.Set("fftFramesProcessed",
-               Napi::Number::New(env, processed.fftReport.framesProcessed));
+    result.Set("fftFramesProcessed", Napi::Number::New(env, processed.fftReport.framesProcessed));
     result.Set("fftBins", Napi::Number::New(env, processed.fftReport.bins));
     result.Set("fftCutoffBin", Napi::Number::New(env, processed.fftReport.cutoffBin));
     return result;
@@ -109,7 +106,7 @@ Napi::Object buildProcessResult(Napi::Env env, const ProcessedWav &processed) {
 // ---------------------------------------------------------------------------
 
 class ProcessWorker : public Napi::AsyncWorker {
-public:
+  public:
     ProcessWorker(Napi::Env env, std::string inputPath, ProcessingOptions opts,
                   Napi::Promise::Deferred deferred)
         : Napi::AsyncWorker(env), inputPath_(std::move(inputPath)), opts_(std::move(opts)),
@@ -124,10 +121,9 @@ public:
         try {
             if (hasProgress_) {
                 opts_.progressCallback = [this](float progress) {
-                    tsfn_.NonBlockingCall(
-                        [progress](Napi::Env env, Napi::Function cb) {
-                            cb.Call({Napi::Number::New(env, progress)});
-                        });
+                    tsfn_.NonBlockingCall([progress](Napi::Env env, Napi::Function cb) {
+                        cb.Call({Napi::Number::New(env, progress)});
+                    });
                 };
             }
             result_ = processWavFile(inputPath_, opts_);
@@ -148,7 +144,7 @@ public:
         deferred_.Reject(e.Value());
     }
 
-private:
+  private:
     std::string inputPath_;
     ProcessingOptions opts_;
     ProcessedWav result_;
@@ -183,7 +179,7 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
 
     if (info.Length() >= 3 && info[2].IsFunction()) {
         auto tsfn = Napi::ThreadSafeFunction::New(env, info[2].As<Napi::Function>(),
-                                                   "processProgress", 0, 1);
+                                                  "processProgress", 0, 1);
         worker->setProgressCallback(std::move(tsfn));
     }
 
@@ -263,16 +259,14 @@ Napi::Value ApplyWindow(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 2)
-        throw Napi::TypeError::New(env,
-                                   "Expected (samples: Float32Array, window: Float32Array)");
+        throw Napi::TypeError::New(env, "Expected (samples: Float32Array, window: Float32Array)");
 
     try {
         std::vector<float> samples = readFloat32Array(info, 0, "samples");
         std::vector<float> winF = readFloat32Array(info, 1, "window");
 
         if (samples.size() != winF.size())
-            throw Napi::TypeError::New(env,
-                                       "Sample and window arrays must have the same length");
+            throw Napi::TypeError::New(env, "Sample and window arrays must have the same length");
 
         const std::vector<double> winD(winF.begin(), winF.end());
         window::apply(samples, winD);
@@ -307,8 +301,8 @@ Napi::Value IFFT(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 1 || !info[0].IsObject())
-        throw Napi::TypeError::New(
-            env, "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
+        throw Napi::TypeError::New(env,
+                                   "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
 
     try {
         const auto spectrum = readSpectrumObject(env, info[0].As<Napi::Object>(), "spectrum");
@@ -326,8 +320,8 @@ Napi::Value FFTMagnitude(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
     if (info.Length() < 1 || !info[0].IsObject())
-        throw Napi::TypeError::New(
-            env, "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
+        throw Napi::TypeError::New(env,
+                                   "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
 
     try {
         const auto spectrum = readSpectrumObject(env, info[0].As<Napi::Object>(), "spectrum");
