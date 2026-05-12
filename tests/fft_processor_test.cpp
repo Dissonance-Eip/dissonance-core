@@ -9,7 +9,7 @@ constexpr double EPS = 1e-6;
 
 TEST(FFTProcessorTest, ImpulseHasFlatSpectrum) {
     std::vector<double> impulse = {1.0, 0.0, 0.0, 0.0};
-    auto spectrum = FFTProcessor::fft(impulse);
+    auto spectrum = fft::transform(impulse);
 
     ASSERT_EQ(spectrum.size(), impulse.size());
     for (const auto &bin : spectrum) {
@@ -20,8 +20,8 @@ TEST(FFTProcessorTest, ImpulseHasFlatSpectrum) {
 
 TEST(FFTProcessorTest, InverseReconstructsImpulse) {
     std::vector<double> impulse = {1.0, 0.0, 0.0, 0.0};
-    auto spectrum = FFTProcessor::fft(impulse);
-    auto time = FFTProcessor::ifft(spectrum);
+    auto spectrum = fft::transform(impulse);
+    auto time = fft::inverse(spectrum);
 
     ASSERT_EQ(time.size(), impulse.size());
     for (size_t i = 0; i < time.size(); ++i) {
@@ -31,8 +31,8 @@ TEST(FFTProcessorTest, InverseReconstructsImpulse) {
 
 TEST(FFTProcessorTest, RoundTripSignal) {
     std::vector<double> signal = {0.0, 1.0, 0.0, -1.0};
-    auto spectrum = FFTProcessor::fft(signal);
-    auto time = FFTProcessor::ifft(spectrum);
+    auto spectrum = fft::transform(signal);
+    auto time = fft::inverse(spectrum);
 
     ASSERT_EQ(time.size(), signal.size());
     for (size_t i = 0; i < time.size(); ++i) {
@@ -42,8 +42,8 @@ TEST(FFTProcessorTest, RoundTripSignal) {
 
 TEST(FFTProcessorTest, MagnitudeMatchesSize) {
     std::vector<double> signal = {0.0, 1.0, 0.0, -1.0};
-    auto spectrum = FFTProcessor::fft(signal);
-    auto mags = FFTProcessor::magnitude(spectrum);
+    auto spectrum = fft::transform(signal);
+    auto mags = fft::magnitude(spectrum);
 
     EXPECT_EQ(mags.size(), spectrum.size());
 }
@@ -52,6 +52,6 @@ TEST(FFTProcessorTest, ThrowsOnEmptyInput) {
     std::vector<double> emptyReal;
     std::vector<std::complex<double>> emptyComplex;
 
-    EXPECT_THROW(FFTProcessor::fft(emptyReal), dissonance::DspError);
-    EXPECT_THROW(FFTProcessor::ifft(emptyComplex), dissonance::DspError);
+    EXPECT_THROW(fft::transform(emptyReal), dissonance::DspError);
+    EXPECT_THROW(fft::inverse(emptyComplex), dissonance::DspError);
 }

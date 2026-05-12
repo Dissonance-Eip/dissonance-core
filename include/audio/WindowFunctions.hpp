@@ -1,36 +1,13 @@
 #pragma once
 
-#include <vector>
 #include <cstddef>
-#include <cstdint>
+#include <vector>
 
-class WindowFunctions {
-  public:
-    enum class Type { Hann, Hamming };
+namespace window {
 
-    /**
-     * Generate a window function of the specified type and size
-     * @param type The window type (Hann or Hamming)
-     * @param size The number of samples in the window
-     * @return Vector containing the window coefficients (values between 0 and 1)
-     */
-    static std::vector<double> generate(Type type, size_t size);
+enum class Type { Hann, Hamming };
 
-    /**
-     * Apply a window function to a buffer of samples
-     * @param samples The audio samples to window (modified in place)
-     * @param window The window coefficients to apply
-     */
-    static void apply(std::vector<double> &samples, const std::vector<double> &window);
+std::vector<double> generate(Type type, size_t size);
+void apply(std::vector<float> &samples, const std::vector<double> &coefficients);
 
-    /**
-     * Apply a window function to int16_t samples
-     * @param samples The audio samples to window (modified in place)
-     * @param window The window coefficients to apply
-     */
-    static void apply(std::vector<int16_t> &samples, const std::vector<double> &window);
-
-  private:
-    static std::vector<double> generateHann(size_t size);
-    static std::vector<double> generateHamming(size_t size);
-};
+} // namespace window

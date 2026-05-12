@@ -5,16 +5,19 @@
       "sources": [
         "src/addon/addon.cpp",
         "src/addon/AddonHelpers.cpp",
+        "src/utils/WavParser.cpp",
         "src/audio/GainProcessor.cpp",
         "src/utils/WavUtils.cpp",
         "src/audio/WavProcessor.cpp",
         "src/audio/WindowFunctions.cpp",
-        "src/audio/FFTProcessor.cpp"
+        "src/audio/FFTProcessor.cpp",
+        "vendor/kissfft/kiss_fft.c"
       ],
       "include_dirs": [
         "<!(node -p \"require('node-addon-api').include\")",
         "<(module_root_dir)/node_modules/node-addon-api",
-        "<(module_root_dir)/include"
+        "<(module_root_dir)/include",
+        "<(module_root_dir)/vendor/kissfft"
       ],
       "dependencies": [
         "<!(node -p \"require('node-addon-api').gyp\")"

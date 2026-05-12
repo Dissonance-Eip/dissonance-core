@@ -46,9 +46,8 @@ std::vector<std::complex<double>> toComplexVector(const Napi::Env &env, const Na
 
 Napi::Array vectorToNumberArray(const Napi::Env &env, const std::vector<double> &values) {
     Napi::Array result = Napi::Array::New(env, values.size());
-    for (size_t i = 0; i < values.size(); ++i) {
+    for (size_t i = 0; i < values.size(); ++i)
         result[i] = Napi::Number::New(env, values[i]);
-    }
     return result;
 }
 
@@ -64,6 +63,8 @@ Napi::Array complexVectorToArray(const Napi::Env &env,
     return result;
 }
 
+// --- Test/internal DSP exports ---
+
 Napi::Value GenerateWindow(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
@@ -74,18 +75,17 @@ Napi::Value GenerateWindow(const Napi::CallbackInfo &info) {
     const std::string typeStr = info[0].As<Napi::String>();
     const size_t size = info[1].As<Napi::Number>().Uint32Value();
 
-    WindowFunctions::Type type;
+    window::Type type;
     if (typeStr == "hann") {
-        type = WindowFunctions::Type::Hann;
+        type = window::Type::Hann;
     } else if (typeStr == "hamming") {
-        type = WindowFunctions::Type::Hamming;
+        type = window::Type::Hamming;
     } else {
         throw Napi::TypeError::New(env, "Window type must be 'hann' or 'hamming'");
     }
 
     try {
-        const std::vector<double> window = WindowFunctions::generate(type, size);
-        return vectorToNumberArray(env, window);
+        return vectorToNumberArray(env, window::generate(type, size));
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -106,11 +106,14 @@ Napi::Value ApplyWindow(const Napi::CallbackInfo &info) {
     }
 
     try {
-        std::vector<double> samples = toDoubleVector(env, samplesArray, "samples");
-        std::vector<double> window = toDoubleVector(env, windowArray, "window");
+        const std::vector<double> samplesD = toDoubleVector(env, samplesArray, "samples");
+        const std::vector<double> win = toDoubleVector(env, windowArray, "window");
 
-        WindowFunctions::apply(samples, window);
-        return vectorToNumberArray(env, samples);
+        std::vector<float> samples(samplesD.begin(), samplesD.end());
+        window::apply(samples, win);
+
+        const std::vector<double> result(samples.begin(), samples.end());
+        return vectorToNumberArray(env, result);
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -129,9 +132,8 @@ Napi::Value FFT(const Napi::CallbackInfo &info) {
     }
 
     try {
-        std::vector<double> samples = toDoubleVector(env, samplesArray, "samples");
-        const std::vector<std::complex<double>> spectrum = FFTProcessor::fft(samples);
-        return complexVectorToArray(env, spectrum);
+        const std::vector<double> samples = toDoubleVector(env, samplesArray, "samples");
+        return complexVectorToArray(env, fft::transform(samples));
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -150,10 +152,8 @@ Napi::Value IFFT(const Napi::CallbackInfo &info) {
     }
 
     try {
-        std::vector<std::complex<double>> spectrum =
-            toComplexVector(env, spectrumArray, "Spectrum");
-        const std::vector<double> samples = FFTProcessor::ifft(spectrum);
-        return vectorToNumberArray(env, samples);
+        return vectorToNumberArray(env,
+                                   fft::inverse(toComplexVector(env, spectrumArray, "Spectrum")));
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -166,12 +166,9 @@ Napi::Value FFTMagnitude(const Napi::CallbackInfo &info) {
         throw Napi::TypeError::New(env, "Expected (spectrum: {real:number, imag:number}[])");
     }
 
-    Napi::Array spectrumArray = info[0].As<Napi::Array>();
     try {
-        std::vector<std::complex<double>> spectrum =
-            toComplexVector(env, spectrumArray, "Spectrum");
-        const std::vector<double> mags = FFTProcessor::magnitude(spectrum);
-        return vectorToNumberArray(env, mags);
+        return vectorToNumberArray(
+            env, fft::magnitude(toComplexVector(env, info[0].As<Napi::Array>(), "Spectrum")));
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -186,20 +183,17 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
 
     const std::string inputPath = info[0].As<Napi::String>();
 
-    double gain = 0.8; // default reduce slightly
-    std::string outputPath = "";
+    ProcessingOptions opts;
     if (info.Length() >= 2 && info[1].IsObject()) {
-        Napi::Object opts = info[1].As<Napi::Object>();
-        if (opts.Has("gain") && opts.Get("gain").IsNumber()) {
-            gain = opts.Get("gain").As<Napi::Number>().DoubleValue();
-        }
-        if (opts.Has("outputPath") && opts.Get("outputPath").IsString()) {
-            outputPath = opts.Get("outputPath").As<Napi::String>();
-        }
+        Napi::Object o = info[1].As<Napi::Object>();
+        if (o.Has("gain") && o.Get("gain").IsNumber())
+            opts.gain = o.Get("gain").As<Napi::Number>().DoubleValue();
+        if (o.Has("outputPath") && o.Get("outputPath").IsString())
+            opts.outputPath = o.Get("outputPath").As<Napi::String>().Utf8Value();
     }
 
     try {
-        const ProcessedWav processed = processWavFile(inputPath, gain, outputPath);
+        const ProcessedWav processed = processWavFile(inputPath, opts);
 
         Napi::Object listTags = Napi::Object::New(env);
         listTags.Set("title", Napi::String::New(env, processed.listTags.title));
@@ -217,10 +211,11 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
         result.Set("waveformText", Napi::String::New(env, processed.waveformText));
         result.Set("listTags", listTags);
         result.Set("processedPath", Napi::String::New(env, processed.processedPath));
-        result.Set("fftApplied", Napi::Boolean::New(env, processed.fftApplied));
-        result.Set("fftFramesProcessed", Napi::Number::New(env, processed.fftFramesProcessed));
-        result.Set("fftBins", Napi::Number::New(env, processed.fftBins));
-        result.Set("fftCutoffBin", Napi::Number::New(env, processed.fftCutoffBin));
+        result.Set("fftApplied", Napi::Boolean::New(env, processed.fftReport.applied));
+        result.Set("fftFramesProcessed",
+                   Napi::Number::New(env, processed.fftReport.framesProcessed));
+        result.Set("fftBins", Napi::Number::New(env, processed.fftReport.bins));
+        result.Set("fftCutoffBin", Napi::Number::New(env, processed.fftReport.cutoffBin));
         return result;
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
@@ -237,14 +232,11 @@ Napi::Value Inspect(const Napi::CallbackInfo &info) {
     const std::string inputPath = info[0].As<Napi::String>();
 
     try {
-        Parser parser;
         std::ifstream file(inputPath, std::ios::binary);
-        if (!file.is_open()) {
+        if (!file.is_open())
             throw dissonance::WavFormatError("Failed to open file: " + inputPath);
-        }
 
-        // Fast path: parse header/chunks; skip reading full audio samples.
-        parser.readFromFile(file, false);
+        const Parser parser = Parser::fromFile(file, false);
 
         Napi::Object listTags = Napi::Object::New(env);
         if (auto it = parser.getOtherChunks().find("LIST"); it != parser.getOtherChunks().end()) {
@@ -257,13 +249,9 @@ Napi::Value Inspect(const Napi::CallbackInfo &info) {
             listTags.Set("genre", Napi::String::New(env, tags.genre));
             listTags.Set("copyright", Napi::String::New(env, tags.copyright));
         } else {
-            listTags.Set("title", Napi::String::New(env, ""));
-            listTags.Set("artist", Napi::String::New(env, ""));
-            listTags.Set("comment", Napi::String::New(env, ""));
-            listTags.Set("date", Napi::String::New(env, ""));
-            listTags.Set("software", Napi::String::New(env, ""));
-            listTags.Set("genre", Napi::String::New(env, ""));
-            listTags.Set("copyright", Napi::String::New(env, ""));
+            for (const char *k :
+                 {"title", "artist", "comment", "date", "software", "genre", "copyright"})
+                listTags.Set(k, Napi::String::New(env, ""));
         }
 
         Napi::Object result = Napi::Object::New(env);

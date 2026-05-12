@@ -22,7 +22,7 @@ int main(int argc, char **argv) {
         }
 
         if (command == "fft") {
-            return Commands::handleFft(inputPath);
+            return Commands::handleFft(inputPath, argc, argv, 3);
         }
 
         std::cerr << "Unknown command: " << command << "\n";
