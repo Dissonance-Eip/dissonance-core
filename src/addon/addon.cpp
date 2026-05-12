@@ -11,55 +11,66 @@
 
 namespace {
 
-std::vector<double> toDoubleVector(const Napi::Env &env, const Napi::Array &array,
-                                   const char *context) {
-    std::vector<double> values(array.Length());
-    for (uint32_t i = 0; i < array.Length(); ++i) {
-        Napi::Value v = array.Get(i);
-        if (!v.IsNumber()) {
-            throw Napi::TypeError::New(env, std::string(context) + " must contain only numbers");
-        }
-        values[i] = v.As<Napi::Number>().DoubleValue();
-    }
-    return values;
-}
-
-std::vector<std::complex<double>> toComplexVector(const Napi::Env &env, const Napi::Array &array,
-                                                  const char *context) {
-    std::vector<std::complex<double>> values(array.Length());
-    for (uint32_t i = 0; i < array.Length(); ++i) {
-        Napi::Value v = array.Get(i);
-        if (!v.IsObject()) {
-            throw Napi::TypeError::New(env, std::string(context) +
-                                                " entries must be objects with real/imag");
-        }
-        Napi::Object bin = v.As<Napi::Object>();
-        if (!bin.Has("real") || !bin.Has("imag")) {
-            throw Napi::TypeError::New(env, std::string(context) +
-                                                " entries must have real and imag fields");
-        }
-        values[i] = std::complex<double>(bin.Get("real").As<Napi::Number>().DoubleValue(),
-                                         bin.Get("imag").As<Napi::Number>().DoubleValue());
-    }
-    return values;
-}
-
-Napi::Array vectorToNumberArray(const Napi::Env &env, const std::vector<double> &values) {
-    Napi::Array result = Napi::Array::New(env, values.size());
-    for (size_t i = 0; i < values.size(); ++i)
-        result[i] = Napi::Number::New(env, values[i]);
+std::vector<float> readFloat32Array(const Napi::CallbackInfo &info, uint32_t idx,
+                                    const char *ctx) {
+    Napi::Env env = info.Env();
+    if (idx >= info.Length() || !info[idx].IsTypedArray())
+        throw Napi::TypeError::New(env, std::string(ctx) + " must be a Float32Array");
+    Napi::TypedArray ta = info[idx].As<Napi::TypedArray>();
+    if (ta.TypedArrayType() != napi_float32_array)
+        throw Napi::TypeError::New(env, std::string(ctx) + " must be a Float32Array");
+    Napi::Float32Array fa = ta.As<Napi::Float32Array>();
+    std::vector<float> result(fa.ElementLength());
+    for (size_t i = 0; i < fa.ElementLength(); ++i)
+        result[i] = fa[i];
     return result;
 }
 
-Napi::Array complexVectorToArray(const Napi::Env &env,
-                                 const std::vector<std::complex<double>> &spectrum) {
-    Napi::Array result = Napi::Array::New(env, spectrum.size());
+Napi::Float32Array makeFloat32Array(Napi::Env env, const std::vector<float> &values) {
+    Napi::Float32Array arr = Napi::Float32Array::New(env, values.size());
+    for (size_t i = 0; i < values.size(); ++i)
+        arr[i] = values[i];
+    return arr;
+}
+
+Napi::Float32Array makeFloat32ArrayFromDouble(Napi::Env env, const std::vector<double> &values) {
+    Napi::Float32Array arr = Napi::Float32Array::New(env, values.size());
+    for (size_t i = 0; i < values.size(); ++i)
+        arr[i] = static_cast<float>(values[i]);
+    return arr;
+}
+
+Napi::Object makeSpectrumObject(Napi::Env env,
+                                const std::vector<std::complex<double>> &spectrum) {
+    Napi::Float32Array real = Napi::Float32Array::New(env, spectrum.size());
+    Napi::Float32Array imag = Napi::Float32Array::New(env, spectrum.size());
     for (size_t i = 0; i < spectrum.size(); ++i) {
-        Napi::Object bin = Napi::Object::New(env);
-        bin.Set("real", Napi::Number::New(env, spectrum[i].real()));
-        bin.Set("imag", Napi::Number::New(env, spectrum[i].imag()));
-        result[i] = bin;
+        real[i] = static_cast<float>(spectrum[i].real());
+        imag[i] = static_cast<float>(spectrum[i].imag());
     }
+    Napi::Object obj = Napi::Object::New(env);
+    obj.Set("real", real);
+    obj.Set("imag", imag);
+    return obj;
+}
+
+std::vector<std::complex<double>> readSpectrumObject(Napi::Env env, const Napi::Object &obj,
+                                                     const char *ctx) {
+    if (!obj.Has("real") || !obj.Has("imag"))
+        throw Napi::TypeError::New(env,
+                                   std::string(ctx) + " must have real and imag Float32Arrays");
+    Napi::Value realVal = obj.Get("real");
+    Napi::Value imagVal = obj.Get("imag");
+    if (!realVal.IsTypedArray() || !imagVal.IsTypedArray())
+        throw Napi::TypeError::New(env, std::string(ctx) + " real and imag must be Float32Arrays");
+    Napi::Float32Array realArr = realVal.As<Napi::Float32Array>();
+    Napi::Float32Array imagArr = imagVal.As<Napi::Float32Array>();
+    if (realArr.ElementLength() != imagArr.ElementLength())
+        throw Napi::TypeError::New(env,
+                                   std::string(ctx) + " real and imag must have the same length");
+    std::vector<std::complex<double>> result(realArr.ElementLength());
+    for (size_t i = 0; i < realArr.ElementLength(); ++i)
+        result[i] = {static_cast<double>(realArr[i]), static_cast<double>(imagArr[i])};
     return result;
 }
 
@@ -68,24 +79,22 @@ Napi::Array complexVectorToArray(const Napi::Env &env,
 Napi::Value GenerateWindow(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
-    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber())
         throw Napi::TypeError::New(env, "Expected (windowType: string, size: number)");
-    }
 
     const std::string typeStr = info[0].As<Napi::String>();
     const size_t size = info[1].As<Napi::Number>().Uint32Value();
 
     window::Type type;
-    if (typeStr == "hann") {
+    if (typeStr == "hann")
         type = window::Type::Hann;
-    } else if (typeStr == "hamming") {
+    else if (typeStr == "hamming")
         type = window::Type::Hamming;
-    } else {
+    else
         throw Napi::TypeError::New(env, "Window type must be 'hann' or 'hamming'");
-    }
 
     try {
-        return vectorToNumberArray(env, window::generate(type, size));
+        return makeFloat32ArrayFromDouble(env, window::generate(type, size));
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -94,26 +103,24 @@ Napi::Value GenerateWindow(const Napi::CallbackInfo &info) {
 Napi::Value ApplyWindow(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
-    if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsArray()) {
-        throw Napi::TypeError::New(env, "Expected (samples: number[], window: number[])");
-    }
-
-    Napi::Array samplesArray = info[0].As<Napi::Array>();
-    Napi::Array windowArray = info[1].As<Napi::Array>();
-
-    if (samplesArray.Length() != windowArray.Length()) {
-        throw Napi::TypeError::New(env, "Sample and window arrays must have the same length");
-    }
+    if (info.Length() < 2)
+        throw Napi::TypeError::New(env,
+                                   "Expected (samples: Float32Array, window: Float32Array)");
 
     try {
-        const std::vector<double> samplesD = toDoubleVector(env, samplesArray, "samples");
-        const std::vector<double> win = toDoubleVector(env, windowArray, "window");
+        std::vector<float> samples = readFloat32Array(info, 0, "samples");
+        std::vector<float> winF = readFloat32Array(info, 1, "window");
 
-        std::vector<float> samples(samplesD.begin(), samplesD.end());
-        window::apply(samples, win);
+        if (samples.size() != winF.size())
+            throw Napi::TypeError::New(env,
+                                       "Sample and window arrays must have the same length");
 
-        const std::vector<double> result(samples.begin(), samples.end());
-        return vectorToNumberArray(env, result);
+        const std::vector<double> winD(winF.begin(), winF.end());
+        window::apply(samples, winD);
+
+        return makeFloat32Array(env, samples);
+    } catch (const Napi::Error &) {
+        throw;
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -122,18 +129,16 @@ Napi::Value ApplyWindow(const Napi::CallbackInfo &info) {
 Napi::Value FFT(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
-    if (info.Length() < 1 || !info[0].IsArray()) {
-        throw Napi::TypeError::New(env, "Expected (samples: number[])");
-    }
-
-    Napi::Array samplesArray = info[0].As<Napi::Array>();
-    if (samplesArray.Length() == 0) {
-        throw Napi::TypeError::New(env, "Input array cannot be empty");
-    }
+    if (info.Length() < 1)
+        throw Napi::TypeError::New(env, "Expected (samples: Float32Array)");
 
     try {
-        const std::vector<double> samples = toDoubleVector(env, samplesArray, "samples");
-        return complexVectorToArray(env, fft::transform(samples));
+        const std::vector<float> samples = readFloat32Array(info, 0, "samples");
+        if (samples.empty())
+            throw Napi::TypeError::New(env, "Input array cannot be empty");
+        return makeSpectrumObject(env, fft::transform(samples));
+    } catch (const Napi::Error &) {
+        throw;
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -142,18 +147,17 @@ Napi::Value FFT(const Napi::CallbackInfo &info) {
 Napi::Value IFFT(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
-    if (info.Length() < 1 || !info[0].IsArray()) {
-        throw Napi::TypeError::New(env, "Expected (spectrum: {real:number, imag:number}[])");
-    }
-
-    Napi::Array spectrumArray = info[0].As<Napi::Array>();
-    if (spectrumArray.Length() == 0) {
-        throw Napi::TypeError::New(env, "Spectrum array cannot be empty");
-    }
+    if (info.Length() < 1 || !info[0].IsObject())
+        throw Napi::TypeError::New(
+            env, "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
 
     try {
-        return vectorToNumberArray(env,
-                                   fft::inverse(toComplexVector(env, spectrumArray, "Spectrum")));
+        const auto spectrum = readSpectrumObject(env, info[0].As<Napi::Object>(), "spectrum");
+        if (spectrum.empty())
+            throw Napi::TypeError::New(env, "Spectrum cannot be empty");
+        return makeFloat32ArrayFromDouble(env, fft::inverse(spectrum));
+    } catch (const Napi::Error &) {
+        throw;
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -162,13 +166,15 @@ Napi::Value IFFT(const Napi::CallbackInfo &info) {
 Napi::Value FFTMagnitude(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
-    if (info.Length() < 1 || !info[0].IsArray()) {
-        throw Napi::TypeError::New(env, "Expected (spectrum: {real:number, imag:number}[])");
-    }
+    if (info.Length() < 1 || !info[0].IsObject())
+        throw Napi::TypeError::New(
+            env, "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
 
     try {
-        return vectorToNumberArray(
-            env, fft::magnitude(toComplexVector(env, info[0].As<Napi::Array>(), "Spectrum")));
+        const auto spectrum = readSpectrumObject(env, info[0].As<Napi::Object>(), "spectrum");
+        return makeFloat32ArrayFromDouble(env, fft::magnitude(spectrum));
+    } catch (const Napi::Error &) {
+        throw;
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }
@@ -177,9 +183,8 @@ Napi::Value FFTMagnitude(const Napi::CallbackInfo &info) {
 Napi::Value Process(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
-    if (info.Length() < 1 || !info[0].IsString()) {
+    if (info.Length() < 1 || !info[0].IsString())
         throw Napi::TypeError::New(env, "Input path must be a string");
-    }
 
     const std::string inputPath = info[0].As<Napi::String>();
 
@@ -225,9 +230,8 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
 Napi::Value Inspect(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
 
-    if (info.Length() < 1 || !info[0].IsString()) {
+    if (info.Length() < 1 || !info[0].IsString())
         throw Napi::TypeError::New(env, "Input path must be a string");
-    }
 
     const std::string inputPath = info[0].As<Napi::String>();
 

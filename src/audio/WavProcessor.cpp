@@ -103,8 +103,7 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
 
                 window::apply(block, win);
 
-                std::vector<double> blockD(block.begin(), block.end());
-                auto spectrum = fft::transform(blockD);
+                auto spectrum = fft::transform(block);
 
                 const size_t cutoff = spectrum.size() / 4;
                 for (size_t k = cutoff; k < spectrum.size(); ++k)

@@ -20,7 +20,7 @@ struct KissCfg {
 
 namespace fft {
 
-std::vector<std::complex<double>> transform(const std::vector<double> &input) {
+std::vector<std::complex<double>> transform(const std::vector<float> &input) {
     if (input.empty())
         throw dissonance::DspError("FFT input cannot be empty");
 
@@ -29,7 +29,7 @@ std::vector<std::complex<double>> transform(const std::vector<double> &input) {
 
     std::vector<kiss_fft_cpx> in(N), out(N);
     for (int i = 0; i < N; ++i) {
-        in[i].r = static_cast<float>(input[i]);
+        in[i].r = input[i];
         in[i].i = 0.0f;
     }
 
