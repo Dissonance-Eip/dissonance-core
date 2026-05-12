@@ -82,7 +82,6 @@ std::string renderWaveformASCII(const std::vector<float> &audioData, int width, 
 
         int y = static_cast<int>((sample - minSample) / range * (height - 1));
         y = std::clamp(y, 0, height - 1);
-        y = std::clamp(y, 0, height - 1);
 
         const int lo = std::min(y, prevY);
         const int hi = std::max(y, prevY);

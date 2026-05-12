@@ -1,11 +1,8 @@
-//
-// Created by noe on 16/03/2025.
-//
-
 #include "cli/WavGUI.hpp"
 #include "utils/WavUtils.hpp"
 #include "core/Errors.hpp"
 
+#include <iostream>
 #include <sstream>
 
 const std::array<std::string, 5> COLORS = {
@@ -32,7 +29,6 @@ void GUI::printMetadata() const {
     if (!valid) {
         throw dissonance::WavFormatError("Failed to read file data");
     }
-    // Print formatted metadata with colors
     const std::string metadata = processed.metadataText;
     std::istringstream stream(metadata);
     std::string line;
@@ -44,22 +40,6 @@ void GUI::printMetadata() const {
         } else {
             std::cout << line << std::endl;
         }
-    }
-}
-
-void GUI::printAudioData() const {
-    if (valid) {
-        const auto &audioData = processed.originalSamples;
-        std::ofstream outFile("../audio_data.bin", std::ios::binary);
-        if (!outFile) {
-            throw dissonance::WavFormatError("Failed to open output file");
-        }
-        outFile.write(reinterpret_cast<const char *>(audioData.data()),
-                      audioData.size() * sizeof(float));
-        outFile.close();
-        std::cout << "Audio data saved to audio_data.bin" << std::endl;
-    } else {
-        throw dissonance::WavFormatError("Failed to read audio data");
     }
 }
 
@@ -75,17 +55,15 @@ void GUI::printWaveform() const {
 }
 
 void GUI::printOtherChunks() const {
-    if (valid) {
-        const auto &otherChunks = processed.otherChunks;
-        for (const auto &[key, value] : otherChunks) {
-            if (key == "LIST") {
-                printListChunk(value);
-            } else {
-                printGenericChunk(key, value);
-            }
-        }
-    } else {
+    if (!valid) {
         throw dissonance::WavFormatError("Failed to read other chunks");
+    }
+    for (const auto &[key, value] : processed.otherChunks) {
+        if (key == "LIST") {
+            printListChunk(value);
+        } else {
+            printGenericChunk(key, value);
+        }
     }
 }
 
@@ -93,22 +71,13 @@ void GUI::printListChunk(const std::vector<char> &value) const {
     std::cout << std::endl << COLORS[3] << "MetaData:" << COLORS[4] << std::endl;
     const ListTags tags = parseListChunk(value);
 
-    // Store in mutable fields
-    title = tags.title;
-    name = tags.artist;
-    description = tags.comment;
-    date = tags.date;
-    software = tags.software;
-    genre = tags.genre;
-    copyright = tags.copyright;
-
-    printField("Title", title);
-    printField("Date", date);
-    printField("Name", name);
-    printField("Description", description);
-    printField("Software", software);
-    printField("Genre", genre);
-    printField("Copyright", copyright);
+    printField("Title", tags.title);
+    printField("Date", tags.date);
+    printField("Name", tags.artist);
+    printField("Description", tags.comment);
+    printField("Software", tags.software);
+    printField("Genre", tags.genre);
+    printField("Copyright", tags.copyright);
 }
 
 void GUI::printGenericChunk(const std::string &key, const std::vector<char> &value) {
