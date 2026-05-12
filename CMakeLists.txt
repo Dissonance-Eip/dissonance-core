@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(dissonance-core LANGUAGES CXX)
+project(dissonance-core LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,6 +8,13 @@ option(BUILD_NODE_ADDON "Build the Node.js addon with CMake (node_api.h required
 option(BUILD_CLI "Build the CLI executable (requires WavGUI)" ON)
 
 set(DISSONANCE_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/include)
+
+# -------------------------
+# KissFFT (vendored, plain C)
+# -------------------------
+add_library(kissfft STATIC vendor/kissfft/kiss_fft.c)
+target_include_directories(kissfft PUBLIC vendor/kissfft)
+set_target_properties(kissfft PROPERTIES LINKER_LANGUAGE C)
 
 set(DISSONANCE_AUDIO_SOURCES
         src/utils/WavParser.cpp
@@ -32,6 +39,7 @@ if(BUILD_NODE_ADDON)
                 ${DISSONANCE_INCLUDE_DIR}
                 ${CMAKE_SOURCE_DIR}/node_modules/node-addon-api
         )
+        target_link_libraries(dissonance_core PRIVATE kissfft)
 
         # If you want CMake to find node_api.h, point NODE_INCLUDE_DIR to your Node headers, e.g.
         # cmake -S . -B cmake-build -DBUILD_NODE_ADDON=ON -DNODE_INCLUDE_DIR="C:/Users/<you>/AppData/Local/node-gyp/Cache/<ver>/include/node"
@@ -57,6 +65,7 @@ if(BUILD_CLI)
         )
 
         target_include_directories(dissonance.core PRIVATE ${DISSONANCE_INCLUDE_DIR})
+        target_link_libraries(dissonance.core PRIVATE kissfft)
 
         set_target_properties(dissonance.core PROPERTIES
                 RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -78,11 +87,11 @@ if(GTest_FOUND AND TEST_SOURCES)
         )
 
         target_include_directories(runTests PRIVATE ${DISSONANCE_INCLUDE_DIR})
+        target_link_libraries(runTests PRIVATE kissfft GTest::GTest GTest::Main)
 
         set_target_properties(runTests PROPERTIES
                 RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         )
 
-        target_link_libraries(runTests PRIVATE GTest::GTest GTest::Main)
         add_test(NAME runTests COMMAND runTests)
 endif()
