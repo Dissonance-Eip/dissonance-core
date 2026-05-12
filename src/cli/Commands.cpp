@@ -1,5 +1,5 @@
 #include "cli/Commands.hpp"
-#include "cli/WavGUI.hpp"
+#include "cli/ConsolePrinter.hpp"
 #include "audio/WavProcessor.hpp"
 #include "audio/FFTProcessor.hpp"
 #include "audio/WindowFunctions.hpp"
@@ -30,14 +30,14 @@ void Commands::printUsage(const char *programName) {
 }
 
 int Commands::handleInfo(const std::string &inputPath) {
-    auto gui = std::make_shared<GUI>(inputPath);
-    if (gui->isValid()) {
+    auto printer = std::make_shared<ConsolePrinter>(inputPath);
+    if (printer->isValid()) {
         std::cout << "=== WAV File Information ===\n";
-        gui->printMetadata();
+        printer->printMetadata();
         std::cout << "\n=== Metadata Chunks ===\n";
-        gui->printOtherChunks();
+        printer->printOtherChunks();
         std::cout << "\n=== Waveform ===\n";
-        gui->printWaveform();
+        printer->printWaveform();
         return EXIT_SUCCESS;
     }
     throw dissonance::WavFormatError("WAV file invalid.");

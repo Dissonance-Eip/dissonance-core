@@ -10,9 +10,9 @@ extern const std::array<std::string, 5> COLORS;
 
 void printField(const std::string &label, const std::string &value);
 
-class GUI {
+class ConsolePrinter {
   public:
-    explicit GUI(const std::string &filename);
+    explicit ConsolePrinter(const std::string &filename);
     [[nodiscard]] bool isValid() const { return valid; }
     void printMetadata() const;
     void printOtherChunks() const;

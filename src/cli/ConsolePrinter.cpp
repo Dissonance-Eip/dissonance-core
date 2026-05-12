@@ -1,4 +1,4 @@
-#include "cli/WavGUI.hpp"
+#include "cli/ConsolePrinter.hpp"
 #include "utils/WavUtils.hpp"
 #include "core/Errors.hpp"
 
@@ -19,13 +19,13 @@ void printField(const std::string &label, const std::string &value) {
     }
 }
 
-GUI::GUI(const std::string &filename)
+ConsolePrinter::ConsolePrinter(const std::string &filename)
     : processed(processWavFile(filename)), valid(true), filename(filename) {
     std::cout << COLORS[0] << "Opening file: " << COLORS[3] << filename << COLORS[4] << std::endl;
     std::cout << COLORS[3] << "File opened successfully" << COLORS[4] << std::endl;
 }
 
-void GUI::printMetadata() const {
+void ConsolePrinter::printMetadata() const {
     if (!valid) {
         throw dissonance::WavFormatError("Failed to read file data");
     }
@@ -43,7 +43,7 @@ void GUI::printMetadata() const {
     }
 }
 
-void GUI::printWaveform() const {
+void ConsolePrinter::printWaveform() const {
     const std::string wave = renderWaveformASCII(processed.originalSamples);
     for (const char ch : wave) {
         if (ch == '|') {
@@ -54,7 +54,7 @@ void GUI::printWaveform() const {
     }
 }
 
-void GUI::printOtherChunks() const {
+void ConsolePrinter::printOtherChunks() const {
     if (!valid) {
         throw dissonance::WavFormatError("Failed to read other chunks");
     }
@@ -67,7 +67,7 @@ void GUI::printOtherChunks() const {
     }
 }
 
-void GUI::printListChunk(const std::vector<char> &value) const {
+void ConsolePrinter::printListChunk(const std::vector<char> &value) const {
     std::cout << std::endl << COLORS[3] << "MetaData:" << COLORS[4] << std::endl;
     const ListTags tags = parseListChunk(value);
 
@@ -80,7 +80,7 @@ void GUI::printListChunk(const std::vector<char> &value) const {
     printField("Copyright", tags.copyright);
 }
 
-void GUI::printGenericChunk(const std::string &key, const std::vector<char> &value) {
+void ConsolePrinter::printGenericChunk(const std::string &key, const std::vector<char> &value) {
     std::cout << "Chunk " << key << " data:" << std::endl;
     for (size_t i = 0; i < value.size(); ++i) {
         const char ch = value[i];
