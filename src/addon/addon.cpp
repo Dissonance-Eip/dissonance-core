@@ -1,4 +1,5 @@
 #include <napi.h>
+#include <fstream>
 #include <string>
 #include <complex>
 
@@ -10,6 +11,10 @@
 #include "core/Errors.hpp"
 
 namespace {
+
+// ---------------------------------------------------------------------------
+// Float32Array helpers
+// ---------------------------------------------------------------------------
 
 std::vector<float> readFloat32Array(const Napi::CallbackInfo &info, uint32_t idx, const char *ctx) {
     Napi::Env env = info.Env();
@@ -70,6 +75,158 @@ std::vector<std::complex<double>> readSpectrumObject(Napi::Env env, const Napi::
     for (size_t i = 0; i < realArr.ElementLength(); ++i)
         result[i] = {static_cast<double>(realArr[i]), static_cast<double>(imagArr[i])};
     return result;
+}
+
+Napi::Object buildProcessResult(Napi::Env env, const ProcessedWav &processed) {
+    Napi::Object listTags = Napi::Object::New(env);
+    listTags.Set("title", Napi::String::New(env, processed.listTags.title));
+    listTags.Set("artist", Napi::String::New(env, processed.listTags.artist));
+    listTags.Set("comment", Napi::String::New(env, processed.listTags.comment));
+    listTags.Set("date", Napi::String::New(env, processed.listTags.date));
+    listTags.Set("software", Napi::String::New(env, processed.listTags.software));
+    listTags.Set("genre", Napi::String::New(env, processed.listTags.genre));
+    listTags.Set("copyright", Napi::String::New(env, processed.listTags.copyright));
+
+    Napi::Object result = Napi::Object::New(env);
+    result.Set("metadata", makeMetadataObject(env, processed.parser));
+    result.Set("otherChunks", makeOtherChunks(env, processed.parser));
+    result.Set("metadataText", Napi::String::New(env, processed.metadataText));
+    result.Set("waveformText", Napi::String::New(env, processed.waveformText));
+    result.Set("listTags", listTags);
+    result.Set("processedPath", Napi::String::New(env, processed.processedPath));
+    result.Set("fftApplied", Napi::Boolean::New(env, processed.fftReport.applied));
+    result.Set("fftFramesProcessed", Napi::Number::New(env, processed.fftReport.framesProcessed));
+    result.Set("fftBins", Napi::Number::New(env, processed.fftReport.bins));
+    result.Set("fftCutoffBin", Napi::Number::New(env, processed.fftReport.cutoffBin));
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// Async worker for process()
+// ---------------------------------------------------------------------------
+
+class ProcessWorker : public Napi::AsyncWorker {
+  public:
+    ProcessWorker(Napi::Env env, std::string inputPath, ProcessingOptions opts,
+                  Napi::Promise::Deferred deferred)
+        : Napi::AsyncWorker(env), inputPath_(std::move(inputPath)), opts_(std::move(opts)),
+          deferred_(std::move(deferred)), hasProgress_(false) {}
+
+    void setProgressCallback(Napi::ThreadSafeFunction tsfn) {
+        tsfn_ = std::move(tsfn);
+        hasProgress_ = true;
+    }
+
+    void Execute() override {
+        try {
+            if (hasProgress_) {
+                opts_.progressCallback = [this](float progress) {
+                    tsfn_.NonBlockingCall([progress](Napi::Env env, Napi::Function cb) {
+                        cb.Call({Napi::Number::New(env, progress)});
+                    });
+                };
+            }
+            result_ = processWavFile(inputPath_, opts_);
+        } catch (const std::exception &e) {
+            SetError(e.what());
+        }
+    }
+
+    void OnOK() override {
+        if (hasProgress_)
+            tsfn_.Release();
+        deferred_.Resolve(buildProcessResult(Env(), result_));
+    }
+
+    void OnError(const Napi::Error &e) override {
+        if (hasProgress_)
+            tsfn_.Release();
+        deferred_.Reject(e.Value());
+    }
+
+  private:
+    std::string inputPath_;
+    ProcessingOptions opts_;
+    ProcessedWav result_;
+    Napi::Promise::Deferred deferred_;
+    Napi::ThreadSafeFunction tsfn_;
+    bool hasProgress_;
+};
+
+// ---------------------------------------------------------------------------
+// N-API exports
+// ---------------------------------------------------------------------------
+
+Napi::Value Process(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsString())
+        throw Napi::TypeError::New(env, "Input path must be a string");
+
+    const std::string inputPath = info[0].As<Napi::String>();
+
+    ProcessingOptions opts;
+    if (info.Length() >= 2 && info[1].IsObject()) {
+        Napi::Object o = info[1].As<Napi::Object>();
+        if (o.Has("gain") && o.Get("gain").IsNumber())
+            opts.gain = o.Get("gain").As<Napi::Number>().DoubleValue();
+        if (o.Has("outputPath") && o.Get("outputPath").IsString())
+            opts.outputPath = o.Get("outputPath").As<Napi::String>().Utf8Value();
+    }
+
+    auto deferred = Napi::Promise::Deferred::New(env);
+    auto *worker = new ProcessWorker(env, inputPath, std::move(opts), deferred);
+
+    if (info.Length() >= 3 && info[2].IsFunction()) {
+        auto tsfn = Napi::ThreadSafeFunction::New(env, info[2].As<Napi::Function>(),
+                                                  "processProgress", 0, 1);
+        worker->setProgressCallback(std::move(tsfn));
+    }
+
+    worker->Queue();
+    return deferred.Promise();
+}
+
+Napi::Value Inspect(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
+
+    if (info.Length() < 1 || !info[0].IsString())
+        throw Napi::TypeError::New(env, "Input path must be a string");
+
+    const std::string inputPath = info[0].As<Napi::String>();
+
+    try {
+        std::ifstream file(inputPath, std::ios::binary);
+        if (!file.is_open())
+            throw dissonance::WavFormatError("Failed to open file: " + inputPath);
+
+        const Parser parser = Parser::fromFile(file, false);
+
+        Napi::Object listTags = Napi::Object::New(env);
+        if (auto it = parser.getOtherChunks().find("LIST"); it != parser.getOtherChunks().end()) {
+            const ListTags tags = parseListChunk(it->second);
+            listTags.Set("title", Napi::String::New(env, tags.title));
+            listTags.Set("artist", Napi::String::New(env, tags.artist));
+            listTags.Set("comment", Napi::String::New(env, tags.comment));
+            listTags.Set("date", Napi::String::New(env, tags.date));
+            listTags.Set("software", Napi::String::New(env, tags.software));
+            listTags.Set("genre", Napi::String::New(env, tags.genre));
+            listTags.Set("copyright", Napi::String::New(env, tags.copyright));
+        } else {
+            for (const char *k :
+                 {"title", "artist", "comment", "date", "software", "genre", "copyright"})
+                listTags.Set(k, Napi::String::New(env, ""));
+        }
+
+        Napi::Object result = Napi::Object::New(env);
+        result.Set("metadata", makeMetadataObject(env, parser));
+        result.Set("otherChunks", makeOtherChunks(env, parser));
+        result.Set("metadataText", Napi::String::New(env, formatMetadataText(parser)));
+        result.Set("listTags", listTags);
+        return result;
+    } catch (const std::exception &e) {
+        throw Napi::Error::New(env, e.what());
+    }
 }
 
 // --- Test/internal DSP exports ---
@@ -171,95 +328,6 @@ Napi::Value FFTMagnitude(const Napi::CallbackInfo &info) {
         return makeFloat32ArrayFromDouble(env, fft::magnitude(spectrum));
     } catch (const Napi::Error &) {
         throw;
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
-    }
-}
-
-Napi::Value Process(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 1 || !info[0].IsString())
-        throw Napi::TypeError::New(env, "Input path must be a string");
-
-    const std::string inputPath = info[0].As<Napi::String>();
-
-    ProcessingOptions opts;
-    if (info.Length() >= 2 && info[1].IsObject()) {
-        Napi::Object o = info[1].As<Napi::Object>();
-        if (o.Has("gain") && o.Get("gain").IsNumber())
-            opts.gain = o.Get("gain").As<Napi::Number>().DoubleValue();
-        if (o.Has("outputPath") && o.Get("outputPath").IsString())
-            opts.outputPath = o.Get("outputPath").As<Napi::String>().Utf8Value();
-    }
-
-    try {
-        const ProcessedWav processed = processWavFile(inputPath, opts);
-
-        Napi::Object listTags = Napi::Object::New(env);
-        listTags.Set("title", Napi::String::New(env, processed.listTags.title));
-        listTags.Set("artist", Napi::String::New(env, processed.listTags.artist));
-        listTags.Set("comment", Napi::String::New(env, processed.listTags.comment));
-        listTags.Set("date", Napi::String::New(env, processed.listTags.date));
-        listTags.Set("software", Napi::String::New(env, processed.listTags.software));
-        listTags.Set("genre", Napi::String::New(env, processed.listTags.genre));
-        listTags.Set("copyright", Napi::String::New(env, processed.listTags.copyright));
-
-        Napi::Object result = Napi::Object::New(env);
-        result.Set("metadata", makeMetadataObject(env, processed.parser));
-        result.Set("otherChunks", makeOtherChunks(env, processed.parser));
-        result.Set("metadataText", Napi::String::New(env, processed.metadataText));
-        result.Set("waveformText", Napi::String::New(env, processed.waveformText));
-        result.Set("listTags", listTags);
-        result.Set("processedPath", Napi::String::New(env, processed.processedPath));
-        result.Set("fftApplied", Napi::Boolean::New(env, processed.fftReport.applied));
-        result.Set("fftFramesProcessed",
-                   Napi::Number::New(env, processed.fftReport.framesProcessed));
-        result.Set("fftBins", Napi::Number::New(env, processed.fftReport.bins));
-        result.Set("fftCutoffBin", Napi::Number::New(env, processed.fftReport.cutoffBin));
-        return result;
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
-    }
-}
-
-Napi::Value Inspect(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 1 || !info[0].IsString())
-        throw Napi::TypeError::New(env, "Input path must be a string");
-
-    const std::string inputPath = info[0].As<Napi::String>();
-
-    try {
-        std::ifstream file(inputPath, std::ios::binary);
-        if (!file.is_open())
-            throw dissonance::WavFormatError("Failed to open file: " + inputPath);
-
-        const Parser parser = Parser::fromFile(file, false);
-
-        Napi::Object listTags = Napi::Object::New(env);
-        if (auto it = parser.getOtherChunks().find("LIST"); it != parser.getOtherChunks().end()) {
-            const ListTags tags = parseListChunk(it->second);
-            listTags.Set("title", Napi::String::New(env, tags.title));
-            listTags.Set("artist", Napi::String::New(env, tags.artist));
-            listTags.Set("comment", Napi::String::New(env, tags.comment));
-            listTags.Set("date", Napi::String::New(env, tags.date));
-            listTags.Set("software", Napi::String::New(env, tags.software));
-            listTags.Set("genre", Napi::String::New(env, tags.genre));
-            listTags.Set("copyright", Napi::String::New(env, tags.copyright));
-        } else {
-            for (const char *k :
-                 {"title", "artist", "comment", "date", "software", "genre", "copyright"})
-                listTags.Set(k, Napi::String::New(env, ""));
-        }
-
-        Napi::Object result = Napi::Object::New(env);
-        result.Set("metadata", makeMetadataObject(env, parser));
-        result.Set("otherChunks", makeOtherChunks(env, parser));
-        result.Set("metadataText", Napi::String::New(env, formatMetadataText(parser)));
-        result.Set("listTags", listTags);
-        return result;
     } catch (const std::exception &e) {
         throw Napi::Error::New(env, e.what());
     }

@@ -4,11 +4,14 @@
 #include "audio/FFTProcessor.hpp"
 #include "audio/WindowFunctions.hpp"
 #include "core/Errors.hpp"
-#include <iostream>
-#include <fstream>
-#include <memory>
-#include <string>
+#include <algorithm>
 #include <cstdlib>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <memory>
+#include <numeric>
+#include <string>
 
 void Commands::printUsage(const char *programName) {
     std::cout << "Usage: " << programName << " <command> <input_file> [options]\n\n"
@@ -20,13 +23,14 @@ void Commands::printUsage(const char *programName) {
               << "  --offset <seconds>  Start offset into the file (default: 0)\n"
               << "  --bins <n>          Number of frequency bins to display (default: 16)\n"
               << "  --full              Average spectrum across entire file (Welch's method)\n"
+              << "  --sort              Sort displayed bins by magnitude (loudest first)\n"
               << "\nOptions for 'process':\n"
               << "  --gain <value>      Apply gain (default: 0.8)\n"
               << "  --output <path>     Output file path (default: <input>-processed.wav)\n"
               << "\nExamples:\n"
               << "  " << programName << " info sound.wav\n"
               << "  " << programName << " process sound.wav --gain 0.5 --output output.wav\n"
-              << "  " << programName << " fft sound.wav\n";
+              << "  " << programName << " fft sound.wav --full --sort\n";
 }
 
 int Commands::handleInfo(const std::string &inputPath) {
@@ -72,6 +76,7 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
     double offsetSecs = 0.0;
     size_t topBins = 16;
     bool fullFile = false;
+    bool sortByMag = false;
 
     for (int i = startIdx; i < argc; ++i) {
         if (std::string(argv[i]) == "--offset" && i + 1 < argc)
@@ -80,6 +85,8 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
             topBins = static_cast<size_t>(std::stoul(argv[++i]));
         else if (std::string(argv[i]) == "--full")
             fullFile = true;
+        else if (std::string(argv[i]) == "--sort")
+            sortByMag = true;
     }
 
     std::ifstream file(inputPath, std::ios::binary);
@@ -121,7 +128,6 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
             window::apply(blockF, win);
 
             auto mags = fft::magnitude(fft::transform(blockF));
-
             for (size_t k = 0; k < frameSize; ++k)
                 accumulated[k] += mags[k];
             ++windowCount;
@@ -152,18 +158,68 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
         windowCount = 1;
     }
 
-    std::cout << "\nFrequency resolution: " << (static_cast<double>(sampleRate) / frameSize)
-              << " Hz/bin\n\n";
+    // Normalize to per-window average — only use positive-frequency half
+    const size_t halfBins = frameSize / 2;
+    std::vector<double> mags(halfBins);
+    for (size_t k = 0; k < halfBins; ++k)
+        mags[k] = accumulated[k] / static_cast<double>(windowCount);
 
-    const size_t displayBins = std::min(topBins, frameSize / 2);
-    std::cout << "Top " << displayBins << " frequency bins:\n";
-    std::cout << "Bin\tFreq (Hz)\tMagnitude\n";
-    std::cout << "---\t---------\t---------\n";
+    // --- Summary stats ---
+    const size_t peakBin =
+        static_cast<size_t>(std::max_element(mags.begin() + 1, mags.end()) - mags.begin());
+    const double peakFreq = (static_cast<double>(peakBin) * sampleRate) / frameSize;
+    const double freqRes = static_cast<double>(sampleRate) / frameSize;
 
-    for (size_t i = 0; i < displayBins; ++i) {
-        double freq = (static_cast<double>(i) * sampleRate) / frameSize;
-        double mag = accumulated[i] / static_cast<double>(windowCount);
-        std::cout << i << "\t" << freq << "\t\t" << mag << "\n";
+    double sumMag = 0.0, sumWeighted = 0.0;
+    for (size_t k = 1; k < halfBins; ++k) {
+        double freq = static_cast<double>(k) * freqRes;
+        sumMag += mags[k];
+        sumWeighted += freq * mags[k];
+    }
+    const double centroid = (sumMag > 0.0) ? (sumWeighted / sumMag) : 0.0;
+    const double dcRatio = (mags[peakBin] > 0.0) ? (mags[0] / mags[peakBin]) : 0.0;
+
+    std::cout << "\n=== Spectrum Summary ===\n";
+    std::cout << std::fixed << std::setprecision(1);
+    printField("Peak frequency", std::to_string(static_cast<int>(std::round(peakFreq))) + " Hz" +
+                                     " (bin " + std::to_string(peakBin) + ")");
+    printField("Spectral centroid", std::to_string(static_cast<int>(std::round(centroid))) + " Hz");
+    if (dcRatio > 0.5)
+        printField("DC bias", "HIGH (" + std::to_string(static_cast<int>(dcRatio * 100)) +
+                                  "% of peak) — consider high-pass filtering");
+
+    // --- Build display list ---
+    std::vector<size_t> indices(std::min(topBins, halfBins));
+    if (sortByMag) {
+        std::vector<size_t> all(halfBins);
+        std::iota(all.begin(), all.end(), 0);
+        std::partial_sort(all.begin(), all.begin() + static_cast<ptrdiff_t>(indices.size()),
+                          all.end(), [&](size_t a, size_t b) { return mags[a] > mags[b]; });
+        std::copy(all.begin(), all.begin() + static_cast<ptrdiff_t>(indices.size()),
+                  indices.begin());
+    } else {
+        std::iota(indices.begin(), indices.end(), 0);
+    }
+
+    const double maxMag = *std::max_element(mags.begin(), mags.end());
+    constexpr int barWidth = 30;
+
+    std::cout << "\n"
+              << (sortByMag ? "Top" : "First") << " " << indices.size() << " frequency bins"
+              << (sortByMag ? " (sorted by magnitude)" : "") << ":\n";
+    std::cout << std::left << std::setw(5) << "Bin" << std::setw(12) << "Freq (Hz)" << std::setw(10)
+              << "Magnitude" << "Bar\n";
+    std::cout << std::string(5, '-') << std::string(12, '-') << std::string(10, '-')
+              << std::string(barWidth, '-') << "\n";
+
+    std::cout << std::fixed << std::setprecision(2);
+    for (size_t idx : indices) {
+        double freq = static_cast<double>(idx) * freqRes;
+        double mag = mags[idx];
+        int bars = (maxMag > 0.0) ? static_cast<int>(mag / maxMag * barWidth) : 0;
+
+        std::cout << std::left << std::setw(5) << idx << std::setw(12) << freq << std::setw(10)
+                  << mag << std::string(bars, '#') << "\n";
     }
 
     return EXIT_SUCCESS;
