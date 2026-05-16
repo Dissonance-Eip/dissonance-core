@@ -1,60 +1,73 @@
 #include "audio/FFTProcessor.hpp"
+#include "core/Errors.hpp"
 
-#include <algorithm>
-#include <cmath>
-#include <stdexcept>
+#include <kiss_fft.h>
 
-std::vector<std::complex<double>> FFTProcessor::fft(const std::vector<double> &input) {
-    if (input.empty()) {
-        throw std::invalid_argument("FFT input cannot be empty");
+namespace {
+
+struct KissCfg {
+    kiss_fft_cfg cfg;
+    KissCfg(int n, int inverse) : cfg(kiss_fft_alloc(n, inverse, nullptr, nullptr)) {
+        if (!cfg)
+            throw dissonance::DspError("Failed to allocate KissFFT config");
+    }
+    ~KissCfg() { kiss_fft_free(cfg); }
+    KissCfg(const KissCfg &) = delete;
+    KissCfg &operator=(const KissCfg &) = delete;
+};
+
+} // namespace
+
+namespace fft {
+
+std::vector<std::complex<double>> transform(const std::vector<float> &input) {
+    if (input.empty())
+        throw dissonance::DspError("FFT input cannot be empty");
+
+    const int N = static_cast<int>(input.size());
+    KissCfg cfg(N, 0);
+
+    std::vector<kiss_fft_cpx> in(N), out(N);
+    for (int i = 0; i < N; ++i) {
+        in[i].r = input[i];
+        in[i].i = 0.0f;
     }
 
-    const size_t N = input.size();
-    std::vector<std::complex<double>> output(N);
+    kiss_fft(cfg.cfg, in.data(), out.data());
 
-    const double pi = std::acos(-1.0);
-    const double twoPiOverN = 2.0 * pi / static_cast<double>(N);
-
-    for (size_t k = 0; k < N; ++k) {
-        std::complex<double> sum{0.0, 0.0};
-        for (size_t n = 0; n < N; ++n) {
-            const double angle = twoPiOverN * static_cast<double>(k * n);
-            const std::complex<double> expTerm{std::cos(angle), -std::sin(angle)};
-            sum += input[n] * expTerm;
-        }
-        output[k] = sum;
-    }
-
-    return output;
+    std::vector<std::complex<double>> result(N);
+    for (int i = 0; i < N; ++i)
+        result[i] = {static_cast<double>(out[i].r), static_cast<double>(out[i].i)};
+    return result;
 }
 
-std::vector<double> FFTProcessor::ifft(const std::vector<std::complex<double>> &spectrum) {
-    if (spectrum.empty()) {
-        throw std::invalid_argument("iFFT input cannot be empty");
+std::vector<double> inverse(const std::vector<std::complex<double>> &spectrum) {
+    if (spectrum.empty())
+        throw dissonance::DspError("iFFT input cannot be empty");
+
+    const int N = static_cast<int>(spectrum.size());
+    KissCfg cfg(N, 1);
+
+    std::vector<kiss_fft_cpx> in(N), out(N);
+    for (int i = 0; i < N; ++i) {
+        in[i].r = static_cast<float>(spectrum[i].real());
+        in[i].i = static_cast<float>(spectrum[i].imag());
     }
 
-    const size_t N = spectrum.size();
-    std::vector<double> output(N);
+    kiss_fft(cfg.cfg, in.data(), out.data());
 
-    const double pi = std::acos(-1.0);
-    const double twoPiOverN = 2.0 * pi / static_cast<double>(N);
-
-    for (size_t n = 0; n < N; ++n) {
-        std::complex<double> sum{0.0, 0.0};
-        for (size_t k = 0; k < N; ++k) {
-            const double angle = twoPiOverN * static_cast<double>(k * n);
-            const std::complex<double> expTerm{std::cos(angle), std::sin(angle)};
-            sum += spectrum[k] * expTerm;
-        }
-        output[n] = sum.real() / static_cast<double>(N);
-    }
-
-    return output;
+    const double scale = 1.0 / static_cast<double>(N);
+    std::vector<double> result(N);
+    for (int i = 0; i < N; ++i)
+        result[i] = static_cast<double>(out[i].r) * scale;
+    return result;
 }
 
-std::vector<double> FFTProcessor::magnitude(const std::vector<std::complex<double>> &spectrum) {
+std::vector<double> magnitude(const std::vector<std::complex<double>> &spectrum) {
     std::vector<double> mags(spectrum.size());
-    std::transform(spectrum.begin(), spectrum.end(), mags.begin(),
-                   [](const std::complex<double> &value) { return std::abs(value); });
+    for (size_t i = 0; i < spectrum.size(); ++i)
+        mags[i] = std::abs(spectrum[i]);
     return mags;
 }
+
+} // namespace fft

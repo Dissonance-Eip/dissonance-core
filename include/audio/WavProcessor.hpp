@@ -1,7 +1,6 @@
-#ifndef WAVPROCESSOR_H
-#define WAVPROCESSOR_H
+#pragma once
 
-#include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -9,22 +8,29 @@
 #include "../utils/WavParser.hpp"
 #include "../utils/WavUtils.hpp"
 
+struct FFTReport {
+    bool applied = false;
+    size_t framesProcessed = 0;
+    size_t bins = 0;
+    size_t cutoffBin = 0;
+};
+
+struct ProcessingOptions {
+    double gain = 0.8;
+    std::string outputPath;
+    std::function<void(float)> progressCallback;
+};
+
 struct ProcessedWav {
-    Parser parser; // parsed header/info
+    Parser parser;
     std::unordered_map<std::string, std::vector<char>> otherChunks;
-    std::vector<int16_t> originalSamples;
-    std::vector<int16_t> processedSamples;
+    std::vector<float> originalSamples;
+    std::vector<float> processedSamples;
     ListTags listTags;
     std::string metadataText;
     std::string waveformText;
     std::string processedPath;
-    bool fftApplied = false;
-    size_t fftFramesProcessed = 0;
-    size_t fftBins = 0;
-    size_t fftCutoffBin = 0;
+    FFTReport fftReport;
 };
 
-ProcessedWav processWavFile(const std::string &inputPath, double gain = 0.8,
-                            const std::string &outputPath = "");
-
-#endif // WAVPROCESSOR_H
+ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOptions &opts = {});
