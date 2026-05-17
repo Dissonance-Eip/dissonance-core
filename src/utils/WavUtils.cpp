@@ -1,3 +1,8 @@
+/**
+ * @file WavUtils.cpp
+ * @brief WAV utility functions: LIST chunk parsing, metadata formatting, ASCII waveform.
+ */
+
 #include "utils/WavUtils.hpp"
 
 #include <algorithm>

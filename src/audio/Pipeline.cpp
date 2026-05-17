@@ -1,3 +1,8 @@
+/**
+ * @file Pipeline.cpp
+ * @brief Sequential AudioStage execution chain.
+ */
+
 #include "audio/Pipeline.hpp"
 
 void Pipeline::addStage(std::unique_ptr<AudioStage> stage) { stages_.push_back(std::move(stage)); }

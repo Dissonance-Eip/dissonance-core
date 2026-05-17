@@ -1,3 +1,12 @@
+/**
+ * @file WavParser.cpp
+ * @brief RIFF/WAV file parser — reads header fields and decodes audio samples.
+ *
+ * Supports PCM 8/16/24/32-bit and IEEE float 32/64-bit formats. All decoded
+ * samples are normalised to [-1, 1]. Unknown chunks are stored verbatim for
+ * round-trip preservation.
+ */
+
 #include "utils/WavParser.hpp"
 
 #include <algorithm>

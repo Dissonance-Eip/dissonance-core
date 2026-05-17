@@ -4,7 +4,6 @@
       "target_name": "dissonance_core",
       "sources": [
         "src/addon/addon.cpp",
-        "src/addon/AddonHelpers.cpp",
         "src/utils/WavParser.cpp",
         "src/utils/WavUtils.cpp",
         "src/audio/GainStage.cpp",

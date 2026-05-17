@@ -7,6 +7,7 @@ cmake-build-*/
 Release/
 Debug/
 cmake-build*/
+build-cli/
 
 # IDE
 .idea/
@@ -25,5 +26,5 @@ cmake-build*/
 *.tgz
 
 # Test files and outputs
-test_files/
 *-processed.wav
+test_files/sound-gain-*.wav

@@ -1,3 +1,8 @@
+/**
+ * @file Commands.cpp
+ * @brief CLI sub-command implementations: info, process, fft.
+ */
+
 #include "cli/Commands.hpp"
 #include "cli/ConsolePrinter.hpp"
 #include "audio/WavProcessor.hpp"
@@ -103,13 +108,13 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
     constexpr size_t frameSize = 512;
     constexpr size_t hopSize = 256;
 
-    const std::vector<double> win = window::generate(window::Type::Hann, frameSize);
+    const std::vector<float> win = window::generate(window::Type::Hann, frameSize);
 
     std::cout << "\n=== FFT Analysis ===\n";
     printField("Channels", std::to_string(numChannels));
     printField("Sample rate", std::to_string(sampleRate) + " Hz");
 
-    std::vector<double> accumulated(frameSize, 0.0);
+    std::vector<float> accumulated(frameSize, 0.0);
     size_t windowCount = 0;
 
     if (fullFile) {
@@ -160,7 +165,7 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
 
     // Normalize to per-window average — only use positive-frequency half
     const size_t halfBins = frameSize / 2;
-    std::vector<double> mags(halfBins);
+    std::vector<float> mags(halfBins);
     for (size_t k = 0; k < halfBins; ++k)
         mags[k] = accumulated[k] / static_cast<double>(windowCount);
 

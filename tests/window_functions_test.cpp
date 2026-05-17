@@ -15,7 +15,7 @@ class WindowFunctionsTest : public ::testing::Test {
 };
 
 TEST_F(WindowFunctionsTest, HannWindowSize8) {
-    std::vector<double> win = window::generate(window::Type::Hann, 8);
+    std::vector<float> win = window::generate(window::Type::Hann, 8);
 
     ASSERT_EQ(win.size(), 8);
 
@@ -31,7 +31,7 @@ TEST_F(WindowFunctionsTest, HannWindowSize8) {
 }
 
 TEST_F(WindowFunctionsTest, HannWindowSize512) {
-    std::vector<double> win = window::generate(window::Type::Hann, 512);
+    std::vector<float> win = window::generate(window::Type::Hann, 512);
 
     ASSERT_EQ(win.size(), 512);
 
@@ -46,14 +46,14 @@ TEST_F(WindowFunctionsTest, HannWindowSize512) {
 }
 
 TEST_F(WindowFunctionsTest, HannWindowSize1) {
-    std::vector<double> win = window::generate(window::Type::Hann, 1);
+    std::vector<float> win = window::generate(window::Type::Hann, 1);
 
     ASSERT_EQ(win.size(), 1);
     EXPECT_EQ(win[0], 1.0);
 }
 
 TEST_F(WindowFunctionsTest, HammingWindowSize8) {
-    std::vector<double> win = window::generate(window::Type::Hamming, 8);
+    std::vector<float> win = window::generate(window::Type::Hamming, 8);
 
     ASSERT_EQ(win.size(), 8);
 
@@ -69,7 +69,7 @@ TEST_F(WindowFunctionsTest, HammingWindowSize8) {
 }
 
 TEST_F(WindowFunctionsTest, HammingWindowSize512) {
-    std::vector<double> win = window::generate(window::Type::Hamming, 512);
+    std::vector<float> win = window::generate(window::Type::Hamming, 512);
 
     ASSERT_EQ(win.size(), 512);
 
@@ -84,15 +84,15 @@ TEST_F(WindowFunctionsTest, HammingWindowSize512) {
 }
 
 TEST_F(WindowFunctionsTest, HammingWindowSize1) {
-    std::vector<double> win = window::generate(window::Type::Hamming, 1);
+    std::vector<float> win = window::generate(window::Type::Hamming, 1);
 
     ASSERT_EQ(win.size(), 1);
     EXPECT_EQ(win[0], 1.0);
 }
 
 TEST_F(WindowFunctionsTest, WindowValuesInRange) {
-    std::vector<double> hannWindow = window::generate(window::Type::Hann, 256);
-    std::vector<double> hammingWindow = window::generate(window::Type::Hamming, 256);
+    std::vector<float> hannWindow = window::generate(window::Type::Hann, 256);
+    std::vector<float> hammingWindow = window::generate(window::Type::Hamming, 256);
 
     for (double val : hannWindow) {
         EXPECT_GE(val, 0.0);
@@ -107,7 +107,7 @@ TEST_F(WindowFunctionsTest, WindowValuesInRange) {
 
 TEST_F(WindowFunctionsTest, ApplyWindowToFloats) {
     std::vector<float> samples = {1.0f, 0.8f, 0.6f, 0.4f, 0.4f, 0.6f, 0.8f, 0.5f};
-    std::vector<double> win = window::generate(window::Type::Hann, 8);
+    std::vector<float> win = window::generate(window::Type::Hann, 8);
 
     std::vector<float> original = samples;
     window::apply(samples, win);
@@ -125,7 +125,7 @@ TEST_F(WindowFunctionsTest, InvalidWindowSize) {
 
 TEST_F(WindowFunctionsTest, MismatchedSizes) {
     std::vector<float> samples = {1.0f, 2.0f, 3.0f, 4.0f};
-    std::vector<double> win = {0.5, 0.5, 0.5};
+    std::vector<float> win = {0.5, 0.5, 0.5};
 
     EXPECT_THROW({ window::apply(samples, win); }, dissonance::DspError);
 }

@@ -1,3 +1,12 @@
+/**
+ * @file WavProcessor.cpp
+ * @brief Top-level audio processing entry point.
+ *
+ * processWavFile() reads a WAV, runs it through the Pipeline
+ * (WindowedFFTStage → GainStage), writes the output, and returns a
+ * ProcessedWav with metadata and statistics.
+ */
+
 #include "audio/WavProcessor.hpp"
 #include "core/Errors.hpp"
 
