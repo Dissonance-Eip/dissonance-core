@@ -23,8 +23,8 @@ std::vector<float> generateHann(size_t size) {
         return w;
     }
     for (size_t n = 0; n < size; ++n)
-        w[n] = 0.5f * (1.0f - std::cos(2.0f * static_cast<float>(M_PI) *
-                                        static_cast<float>(n) / static_cast<float>(size - 1)));
+        w[n] = 0.5f * (1.0f - std::cos(2.0f * static_cast<float>(M_PI) * static_cast<float>(n) /
+                                       static_cast<float>(size - 1)));
     return w;
 }
 
@@ -35,8 +35,8 @@ std::vector<float> generateHamming(size_t size) {
         return w;
     }
     for (size_t n = 0; n < size; ++n)
-        w[n] = 0.54f - 0.46f * std::cos(2.0f * static_cast<float>(M_PI) *
-                                         static_cast<float>(n) / static_cast<float>(size - 1));
+        w[n] = 0.54f - 0.46f * std::cos(2.0f * static_cast<float>(M_PI) * static_cast<float>(n) /
+                                        static_cast<float>(size - 1));
     return w;
 }
 

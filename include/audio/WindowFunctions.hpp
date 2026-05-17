@@ -13,8 +13,8 @@ namespace window {
 
 /** @brief Supported window shapes. */
 enum class Type {
-    Hann,    ///< Hann window — tapers fully to 0 at both edges.
-    Hamming  ///< Hamming window — tapers to ~0.08 at edges, lower sidelobe roll-off.
+    Hann,   ///< Hann window — tapers fully to 0 at both edges.
+    Hamming ///< Hamming window — tapers to ~0.08 at edges, lower sidelobe roll-off.
 };
 
 /**

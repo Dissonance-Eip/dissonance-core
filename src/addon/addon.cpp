@@ -16,8 +16,8 @@ namespace {
 class ProcessWorker : public Napi::AsyncWorker {
   public:
     ProcessWorker(Napi::Env env, std::string inputPath, Napi::Promise::Deferred deferred)
-        : Napi::AsyncWorker(env), inputPath_(std::move(inputPath)),
-          deferred_(std::move(deferred)) {}
+        : Napi::AsyncWorker(env), inputPath_(std::move(inputPath)), deferred_(std::move(deferred)) {
+    }
 
     void Execute() override {
         try {

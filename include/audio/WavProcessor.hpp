@@ -18,14 +18,14 @@ struct FFTReport {
 
 /** @brief Tunable parameters for processWavFile(). */
 struct ProcessingOptions {
-    double gain = 0.8;                       ///< Linear amplitude gain applied after FFT filtering.
-    std::string outputPath;                  ///< Output file path. Auto-generated if empty.
+    double gain = 0.8;      ///< Linear amplitude gain applied after FFT filtering.
+    std::string outputPath; ///< Output file path. Auto-generated if empty.
     std::function<void(float)> progressCallback; ///< Optional progress callback in [0, 1].
 };
 
 /** @brief Everything produced by processWavFile() — parsed metadata plus the processed audio. */
 struct ProcessedWav {
-    Parser parser;                                             ///< Parsed WAV header and metadata.
+    Parser parser; ///< Parsed WAV header and metadata.
     std::unordered_map<std::string, std::vector<char>> otherChunks; ///< Non-fmt/data WAV chunks.
     std::vector<float> originalSamples;  ///< Raw samples before processing.
     std::vector<float> processedSamples; ///< Samples after the full pipeline.
