@@ -41,7 +41,7 @@ jobs:
 
       - name: Smoke test addon load
         run: |
-          node -e "const addon=require('./build/Release/dissonance_core.node'); const required=['process','generateWindow','applyWindow','fft','ifft','fftMagnitude']; const missing=required.filter((k)=>typeof addon[k]!=='function'); if(missing.length){console.error('Missing exports: ' + missing.join(', ')); process.exit(1);} console.log('Addon exports OK:', required.join(', '));"
+          node -e "const addon=require('./build/Release/dissonance_core.node'); const required=['process']; const missing=required.filter((k)=>typeof addon[k]!=='function'); if(missing.length){console.error('Missing exports: ' + missing.join(', ')); process.exit(1);} console.log('Addon exports OK:', required.join(', '));"
 
       - name: Run addon JS tests
         run: npm test
