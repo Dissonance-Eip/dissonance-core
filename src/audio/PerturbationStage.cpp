@@ -34,8 +34,7 @@ void PerturbationStage::process(std::vector<float> &samples, uint16_t numChannel
     std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
 
     std::vector<float> noise(totalSamples);
-    for (auto &n : noise)
-        n = dist(rng) * noiseAmplitude;
+    std::generate(noise.begin(), noise.end(), [&]() { return dist(rng) * noiseAmplitude; });
 
     // Apply HP filter independently per channel (interleaved layout)
     const size_t framesCount = totalSamples / static_cast<size_t>(numChannels);
