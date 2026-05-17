@@ -30,11 +30,13 @@ void Commands::printUsage(const char *programName) {
               << "  --full              Average spectrum across entire file (Welch's method)\n"
               << "  --sort              Sort displayed bins by magnitude (loudest first)\n"
               << "\nOptions for 'process':\n"
-              << "  --gain <value>      Apply gain (default: 0.8)\n"
-              << "  --output <path>     Output file path (default: <input>-processed.wav)\n"
+              << "  --gain <value>          Apply gain (default: 0.8)\n"
+              << "  --perturbation <0..1>   Noise strength for AI-disruption (default: 0.5)\n"
+              << "  --output <path>         Output file path (default: <input>-processed.wav)\n"
               << "\nExamples:\n"
               << "  " << programName << " info sound.wav\n"
-              << "  " << programName << " process sound.wav --gain 0.5 --output output.wav\n"
+              << "  " << programName
+              << " process sound.wav --gain 0.5 --perturbation 0.8 --output output.wav\n"
               << "  " << programName << " fft sound.wav --full --sort\n";
 }
 
@@ -58,6 +60,8 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
     for (int i = startIdx; i < argc; ++i) {
         if (std::string(argv[i]) == "--gain" && i + 1 < argc) {
             opts.gain = std::stod(argv[++i]);
+        } else if (std::string(argv[i]) == "--perturbation" && i + 1 < argc) {
+            opts.perturbation = static_cast<float>(std::stod(argv[++i]));
         } else if (std::string(argv[i]) == "--output" && i + 1 < argc) {
             opts.outputPath = argv[++i];
         }
@@ -73,6 +77,10 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
         printField("FFT frames", std::to_string(result.fftReport.framesProcessed));
         printField("FFT bins", std::to_string(result.fftReport.bins));
         printField("Cutoff bin", std::to_string(result.fftReport.cutoffBin));
+    }
+    if (opts.perturbation > 0.0f) {
+        printField("Perturbation strength", std::to_string(opts.perturbation));
+        printField("Perturbation RMS", std::to_string(result.perturbationRmsDbfs) + " dBFS");
     }
     return EXIT_SUCCESS;
 }

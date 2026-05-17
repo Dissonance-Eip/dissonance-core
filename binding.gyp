@@ -7,6 +7,7 @@
         "src/utils/WavParser.cpp",
         "src/utils/WavUtils.cpp",
         "src/audio/GainStage.cpp",
+        "src/audio/PerturbationStage.cpp",
         "src/audio/Pipeline.cpp",
         "src/audio/WavProcessor.cpp",
         "src/audio/WindowedFFTStage.cpp",

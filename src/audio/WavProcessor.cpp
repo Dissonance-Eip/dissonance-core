@@ -3,8 +3,8 @@
  * @brief Top-level audio processing entry point.
  *
  * processWavFile() reads a WAV, runs it through the Pipeline
- * (WindowedFFTStage → GainStage), writes the output, and returns a
- * ProcessedWav with metadata and statistics.
+ * (GainStage → WindowedFFTStage → PerturbationStage), writes the output,
+ * and returns a ProcessedWav with metadata and statistics.
  */
 
 #include "audio/WavProcessor.hpp"
@@ -16,6 +16,7 @@
 #include <memory>
 
 #include "audio/GainStage.hpp"
+#include "audio/PerturbationStage.hpp"
 #include "audio/Pipeline.hpp"
 #include "audio/WindowedFFTStage.hpp"
 
@@ -89,14 +90,25 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
     auto fftOwned = std::make_unique<WindowedFFTStage>(2048, 0.25f, opts.progressCallback);
     const WindowedFFTStage *fftStage = fftOwned.get();
 
+    // Seed the RNG from file characteristics so the perturbation is repeatable
+    // for the same input but unique per file.
+    const uint64_t seed = static_cast<uint64_t>(parser.getSampleRate()) *
+                          static_cast<uint64_t>(result.originalSamples.size());
+    auto perturbOwned =
+        std::make_unique<PerturbationStage>(opts.perturbation, parser.getSampleRate(), seed);
+    const PerturbationStage *perturbStage = perturbOwned.get();
+
     Pipeline pipeline;
     pipeline.addStage(std::make_unique<GainStage>(opts.gain));
     pipeline.addStage(std::move(fftOwned));
+    pipeline.addStage(std::move(perturbOwned));
     pipeline.run(result.processedSamples, parser.getNumChannels());
 
     if (fftStage->framesProcessed() > 0)
         result.fftReport = {true, fftStage->framesProcessed(), fftStage->bins(),
                             fftStage->cutoffBin()};
+
+    result.perturbationRmsDbfs = perturbStage->rmsDbfs();
 
     result.processedPath = makeOutputPath(inputPath, opts.outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);

@@ -18,8 +18,9 @@ struct FFTReport {
 
 /** @brief Tunable parameters for processWavFile(). */
 struct ProcessingOptions {
-    double gain = 0.8;      ///< Linear amplitude gain applied after FFT filtering.
-    std::string outputPath; ///< Output file path. Auto-generated if empty.
+    double gain = 0.8;         ///< Linear amplitude gain applied after FFT filtering.
+    float perturbation = 0.5f; ///< PerturbationStage noise strength in [0, 1]. 0 = off.
+    std::string outputPath;    ///< Output file path. Auto-generated if empty.
     std::function<void(float)> progressCallback; ///< Optional progress callback in [0, 1].
 };
 
@@ -34,6 +35,7 @@ struct ProcessedWav {
     std::string waveformText;            ///< ASCII waveform rendering.
     std::string processedPath;           ///< Absolute path of the written output file.
     FFTReport fftReport;                 ///< FFT stage statistics.
+    float perturbationRmsDbfs = -200.0f; ///< RMS of injected noise in dBFS (-200 = none added).
 };
 
 /**
