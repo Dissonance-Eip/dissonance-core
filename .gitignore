@@ -25,5 +25,5 @@ cmake-build*/
 *.tgz
 
 # Test files and outputs
-test_files/
 *-processed.wav
+test_files/sound-gain-*.wav
