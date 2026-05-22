@@ -72,11 +72,13 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
 
         if (jsOpts.Has("outputPath")) {
             Napi::Value v = jsOpts.Get("outputPath");
-            if (v.IsString()) opts.outputPath = v.As<Napi::String>().Utf8Value();
+            if (v.IsString())
+                opts.outputPath = v.As<Napi::String>().Utf8Value();
         }
         if (jsOpts.Has("perturbation")) {
             Napi::Value v = jsOpts.Get("perturbation");
-            if (v.IsNumber()) opts.perturbation = static_cast<float>(v.As<Napi::Number>().DoubleValue());
+            if (v.IsNumber())
+                opts.perturbation = static_cast<float>(v.As<Napi::Number>().DoubleValue());
         }
     }
 
@@ -116,38 +118,38 @@ class ReadMetadataWorker : public Napi::AsyncWorker {
         Napi::Env env = Env();
 
         Napi::Object audio = Napi::Object::New(env);
-        audio.Set("audioFormat",   Napi::Number::New(env, parser_.getAudioFormat()));
-        audio.Set("numChannels",   Napi::Number::New(env, parser_.getNumChannels()));
-        audio.Set("sampleRate",    Napi::Number::New(env, parser_.getSampleRate()));
-        audio.Set("byteRate",      Napi::Number::New(env, parser_.getByteRate()));
-        audio.Set("blockAlign",    Napi::Number::New(env, parser_.getBlockAlign()));
+        audio.Set("audioFormat", Napi::Number::New(env, parser_.getAudioFormat()));
+        audio.Set("numChannels", Napi::Number::New(env, parser_.getNumChannels()));
+        audio.Set("sampleRate", Napi::Number::New(env, parser_.getSampleRate()));
+        audio.Set("byteRate", Napi::Number::New(env, parser_.getByteRate()));
+        audio.Set("blockAlign", Napi::Number::New(env, parser_.getBlockAlign()));
         audio.Set("bitsPerSample", Napi::Number::New(env, parser_.getBitsPerSample()));
 
         // Derive sample count from the data chunk size.
-        const uint32_t dataSize  = parser_.getSubchunk2Size();
-        const uint16_t bps       = parser_.getBitsPerSample();
-        const uint16_t channels  = parser_.getNumChannels();
-        const uint32_t rate      = parser_.getSampleRate();
-        const uint32_t bpsBytes  = bps > 0 ? bps / 8 : 0;
-        const double   durationSec =
+        const uint32_t dataSize = parser_.getSubchunk2Size();
+        const uint16_t bps = parser_.getBitsPerSample();
+        const uint16_t channels = parser_.getNumChannels();
+        const uint32_t rate = parser_.getSampleRate();
+        const uint32_t bpsBytes = bps > 0 ? bps / 8 : 0;
+        const double durationSec =
             (bpsBytes > 0 && channels > 0 && rate > 0)
                 ? static_cast<double>(dataSize) / (bpsBytes * channels * rate)
                 : 0.0;
         audio.Set("durationSec", Napi::Number::New(env, durationSec));
 
         Napi::Object tags = Napi::Object::New(env);
-        tags.Set("title",     Napi::String::New(env, tags_.title));
-        tags.Set("artist",    Napi::String::New(env, tags_.artist));
-        tags.Set("comment",   Napi::String::New(env, tags_.comment));
-        tags.Set("date",      Napi::String::New(env, tags_.date));
-        tags.Set("genre",     Napi::String::New(env, tags_.genre));
-        tags.Set("software",  Napi::String::New(env, tags_.software));
+        tags.Set("title", Napi::String::New(env, tags_.title));
+        tags.Set("artist", Napi::String::New(env, tags_.artist));
+        tags.Set("comment", Napi::String::New(env, tags_.comment));
+        tags.Set("date", Napi::String::New(env, tags_.date));
+        tags.Set("genre", Napi::String::New(env, tags_.genre));
+        tags.Set("software", Napi::String::New(env, tags_.software));
         tags.Set("copyright", Napi::String::New(env, tags_.copyright));
 
         Napi::Object result = Napi::Object::New(env);
-        result.Set("ok",    Napi::Boolean::New(env, true));
+        result.Set("ok", Napi::Boolean::New(env, true));
         result.Set("audio", audio);
-        result.Set("tags",  tags);
+        result.Set("tags", tags);
         deferred_.Resolve(result);
     }
 
@@ -155,8 +157,8 @@ class ReadMetadataWorker : public Napi::AsyncWorker {
 
   private:
     std::string inputPath_;
-    Parser      parser_;
-    ListTags    tags_;
+    Parser parser_;
+    ListTags tags_;
     Napi::Promise::Deferred deferred_;
 };
 
@@ -199,7 +201,7 @@ class WriteTagsWorker : public Napi::AsyncWorker {
 
   private:
     std::string filePath_;
-    ListTags    tags_;
+    ListTags tags_;
     Napi::Promise::Deferred deferred_;
 };
 
@@ -212,18 +214,19 @@ Napi::Value WriteTags(const Napi::CallbackInfo &info) {
     Napi::Object obj = info[1].As<Napi::Object>();
 
     auto str = [&](const char *key) -> std::string {
-        if (!obj.Has(key)) return {};
+        if (!obj.Has(key))
+            return {};
         Napi::Value v = obj.Get(key);
         return v.IsString() ? v.As<Napi::String>().Utf8Value() : std::string{};
     };
 
     ListTags tags;
-    tags.title     = str("title");
-    tags.artist    = str("artist");
-    tags.comment   = str("comment");
-    tags.date      = str("date");
-    tags.genre     = str("genre");
-    tags.software  = str("software");
+    tags.title = str("title");
+    tags.artist = str("artist");
+    tags.comment = str("comment");
+    tags.date = str("date");
+    tags.genre = str("genre");
+    tags.software = str("software");
     tags.copyright = str("copyright");
 
     auto deferred = Napi::Promise::Deferred::New(env);
@@ -234,9 +237,9 @@ Napi::Value WriteTags(const Napi::CallbackInfo &info) {
 // ---------------------------------------------------------------------------
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    exports.Set("process",      Napi::Function::New(env, Process));
+    exports.Set("process", Napi::Function::New(env, Process));
     exports.Set("readMetadata", Napi::Function::New(env, ReadMetadata));
-    exports.Set("writeTags",    Napi::Function::New(env, WriteTags));
+    exports.Set("writeTags", Napi::Function::New(env, WriteTags));
     return exports;
 }
 
