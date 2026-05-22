@@ -25,6 +25,19 @@ struct ListTags {
 ListTags parseListChunk(const std::vector<char> &value);
 
 /**
+ * @brief Serialise a ListTags into a complete RIFF LIST/INFO chunk (header included).
+ *        Empty tag fields are omitted. Returns an empty vector if all fields are empty.
+ */
+std::vector<char> buildListInfoChunk(const ListTags &tags);
+
+/**
+ * @brief Rewrite the LIST/INFO chunk in an existing WAV file in-place.
+ *        Reads the file, replaces (or appends) the LIST chunk, and writes it back.
+ * @throws std::runtime_error on I/O or format errors.
+ */
+void writeTagsToWav(const std::string &filePath, const ListTags &tags);
+
+/**
  * @brief Format the WAV header fields as a multi-line human-readable string.
  * @param parser  A fully parsed Parser instance.
  */

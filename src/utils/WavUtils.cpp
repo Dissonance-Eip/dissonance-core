@@ -7,6 +7,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
+#include <fstream>
 #include <sstream>
 #include <string>
 
@@ -50,6 +52,116 @@ ListTags parseListChunk(const std::vector<char> &value) {
     }
 
     return tags;
+}
+
+namespace {
+
+// Write a little-endian uint32 into a byte vector.
+void pushU32LE(std::vector<char> &buf, uint32_t v) {
+    buf.push_back(static_cast<char>(v & 0xFF));
+    buf.push_back(static_cast<char>((v >> 8) & 0xFF));
+    buf.push_back(static_cast<char>((v >> 16) & 0xFF));
+    buf.push_back(static_cast<char>((v >> 24) & 0xFF));
+}
+
+} // namespace
+
+std::vector<char> buildListInfoChunk(const ListTags &tags) {
+    struct TagDef { const char *id; const std::string &value; };
+    const TagDef defs[] = {
+        {"INAM", tags.title},
+        {"IART", tags.artist},
+        {"ICMT", tags.comment},
+        {"ICRD", tags.date},
+        {"IGNR", tags.genre},
+        {"ISFT", tags.software},
+        {"ICOP", tags.copyright},
+    };
+
+    // Build INFO payload: "INFO" + sub-chunks for each non-empty field.
+    std::vector<char> info;
+    info.insert(info.end(), {'I', 'N', 'F', 'O'});
+
+    for (const auto &def : defs) {
+        if (def.value.empty()) continue;
+        const uint32_t strSize = static_cast<uint32_t>(def.value.size()) + 1; // include null
+        info.insert(info.end(), def.id, def.id + 4);
+        pushU32LE(info, strSize);
+        info.insert(info.end(), def.value.begin(), def.value.end());
+        info.push_back('\0');
+        if (strSize % 2 != 0) info.push_back('\0'); // word-align
+    }
+
+    // If nothing was written (only "INFO" header present), return empty.
+    if (info.size() == 4) return {};
+
+    // Wrap in LIST chunk header.
+    std::vector<char> chunk;
+    chunk.insert(chunk.end(), {'L', 'I', 'S', 'T'});
+    pushU32LE(chunk, static_cast<uint32_t>(info.size()));
+    chunk.insert(chunk.end(), info.begin(), info.end());
+    return chunk;
+}
+
+void writeTagsToWav(const std::string &filePath, const ListTags &tags) {
+    // Read entire file.
+    std::ifstream in(filePath, std::ios::binary);
+    if (!in.is_open()) throw std::runtime_error("Cannot open file for tag write: " + filePath);
+    std::vector<char> file((std::istreambuf_iterator<char>(in)),
+                            std::istreambuf_iterator<char>());
+    in.close();
+
+    if (file.size() < 12 ||
+        std::string(file.data(), 4) != "RIFF" ||
+        std::string(file.data() + 8, 4) != "WAVE")
+        throw std::runtime_error("Not a valid RIFF/WAVE file: " + filePath);
+
+    // Walk chunks. Keep everything except existing LIST chunks.
+    // The parser breaks after reading the data chunk, so LIST must sit BEFORE data
+    // to be visible on the next readMetadata call.
+    std::vector<char> beforeData; // fmt + other non-LIST, non-data chunks
+    std::vector<char> dataChunk;  // the data chunk verbatim
+    size_t offset = 12;
+    while (offset + 8 <= file.size()) {
+        const std::string id(file.data() + offset, 4);
+        uint32_t chunkSize = 0;
+        std::memcpy(&chunkSize, file.data() + offset + 4, 4);
+        const size_t total = 8 + chunkSize + (chunkSize % 2);
+        const size_t end   = std::min(offset + total, file.size());
+
+        if (id == "LIST") {
+            // drop existing LIST chunk — we'll rebuild it
+        } else if (id == "data") {
+            dataChunk.insert(dataChunk.end(),
+                             file.begin() + static_cast<std::ptrdiff_t>(offset),
+                             file.begin() + static_cast<std::ptrdiff_t>(end));
+        } else {
+            beforeData.insert(beforeData.end(),
+                              file.begin() + static_cast<std::ptrdiff_t>(offset),
+                              file.begin() + static_cast<std::ptrdiff_t>(end));
+        }
+        offset += total;
+    }
+
+    // Build new LIST/INFO chunk and place it before the data chunk.
+    const auto listChunk = buildListInfoChunk(tags);
+    std::vector<char> chunks;
+    chunks.insert(chunks.end(), beforeData.begin(),  beforeData.end());
+    chunks.insert(chunks.end(), listChunk.begin(),   listChunk.end());
+    chunks.insert(chunks.end(), dataChunk.begin(),   dataChunk.end());
+
+    // Rebuild file with corrected RIFF size.
+    const uint32_t riffSize = 4 + static_cast<uint32_t>(chunks.size()); // "WAVE" + chunks
+    std::vector<char> out;
+    out.reserve(12 + chunks.size());
+    out.insert(out.end(), {'R', 'I', 'F', 'F'});
+    pushU32LE(out, riffSize);
+    out.insert(out.end(), {'W', 'A', 'V', 'E'});
+    out.insert(out.end(), chunks.begin(), chunks.end());
+
+    std::ofstream outf(filePath, std::ios::binary | std::ios::trunc);
+    if (!outf.is_open()) throw std::runtime_error("Cannot write file: " + filePath);
+    outf.write(out.data(), static_cast<std::streamsize>(out.size()));
 }
 
 std::string formatMetadataText(const Parser &parser) {
