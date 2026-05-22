@@ -6,12 +6,49 @@ Native C++ audio core that provides:
 
 ## Addon contract
 
+The `.node` addon exposes three async functions:
+
 ```js
-process(inputPath: string): Promise<{ ok: boolean, processedPath: string }>
+process(
+  inputPath: string,
+  options?: { outputPath?: string, perturbation?: number }
+): Promise<{ ok: boolean, processedPath: string }>
+
+readMetadata(filePath: string): Promise<{
+  ok: boolean,
+  audio: {
+    audioFormat, numChannels, sampleRate, byteRate,
+    blockAlign, bitsPerSample, durationSec
+  },
+  tags: { title, artist, comment, date, genre, software, copyright }
+}>
+
+writeTags(filePath: string, tags: {
+  title?, artist?, comment?, date?, genre?, software?, copyright?
+}): Promise<{ ok: boolean }>
 ```
 
-The addon applies the full protection pipeline (spectral low-pass filter → gain)
-and writes the result next to the input file as `<stem>-processed.wav`.
+### `process`
+
+Runs the full pipeline: `GainStage → WindowedFFTStage → PerturbationStage`.
+
+- `options.outputPath` — if omitted, falls back to `<inputDir>/<stem>-processed.wav`
+  (used by the CLI and tests; the UI always passes a temp path).
+- `options.perturbation` — `[0, 1]`, defaults to `ProcessingOptions::perturbation`
+  if omitted. The UI surfaces this as a slider; the CLI surfaces it as
+  `--perturbation`.
+
+### `readMetadata`
+
+Header-only parse — no audio decode. Returns both the WAV format fields and any
+LIST/INFO tags. Used by the UI to populate the editable metadata form.
+
+### `writeTags`
+
+Rewrites the LIST/INFO chunk in place. Other chunks (fmt, data, etc.) are
+preserved. The LIST chunk is written *before* the data chunk so the parser
+(which breaks after data) can read it back on the next `readMetadata` call.
+Empty tag fields are omitted from the output.
 
 ## Local builds
 
@@ -38,9 +75,19 @@ npm run build:local         # addon:dist + cli:debug in one step
 
 ```bash
 cmake-build/Debug/dissonance.core info <file.wav>
-cmake-build/Debug/dissonance.core process <file.wav> --gain 0.5 --output out.wav
+cmake-build/Debug/dissonance.core process <file.wav> \
+  --gain 0.5 \
+  --perturbation 0.8 \
+  --output out.wav
 cmake-build/Debug/dissonance.core fft <file.wav> --full --sort
 ```
+
+Flags accepted by `process`:
+
+- `--gain <0..1>` — linear amplitude gain applied after FFT filtering
+- `--perturbation <0..1>` — strength of the sub-perceptual noise injected
+  for AI-disruption (the same parameter exposed by the UI's Protection slider)
+- `--output <path>` — destination path; defaults to `<inputDir>/<stem>-processed.wav`
 
 ## Testing
 
