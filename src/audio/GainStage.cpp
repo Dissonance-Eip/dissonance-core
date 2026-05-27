@@ -1,3 +1,8 @@
+/**
+ * @file GainStage.cpp
+ * @brief Linear amplitude gain stage with [-1, 1] output clamping.
+ */
+
 #include "audio/GainStage.hpp"
 
 #include <algorithm>

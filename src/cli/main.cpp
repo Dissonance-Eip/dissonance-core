@@ -1,3 +1,13 @@
+/**
+ * @file main.cpp
+ * @brief Entry point for the dissonance.core CLI.
+ *
+ * Dispatches to the appropriate Commands handler based on the first argument:
+ *   info      — print WAV metadata and waveform
+ *   process   — apply gain and spectral filtering
+ *   fft       — display FFT spectrum analysis
+ */
+
 #include <iostream>
 #include <string>
 #include <cstdlib>

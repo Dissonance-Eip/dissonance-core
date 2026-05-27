@@ -15,4 +15,14 @@ const dest = path.join(destDir, `dissonance_core-${platform}.node`);
 fs.mkdirSync(destDir, { recursive: true });
 fs.copyFileSync(src, dest);
 
+// On macOS, apply an ad-hoc code signature so Electron (hardened runtime)
+// can load the binary without a CODESIGNING kill.
+if (process.platform === 'darwin') {
+  const { spawnSync } = require('child_process');
+  const result = spawnSync('codesign', ['--sign', '-', '--force', dest]);
+  if (result.status !== 0) {
+    console.warn('codesign warning:', result.stderr && result.stderr.toString());
+  }
+}
+
 console.log('Prepared', dest);

@@ -30,6 +30,7 @@ set(DISSONANCE_SOURCES
         src/utils/WavParser.cpp
         src/utils/WavUtils.cpp
         src/audio/GainStage.cpp
+        src/audio/PerturbationStage.cpp
         src/audio/Pipeline.cpp
         src/audio/WavProcessor.cpp
         src/audio/WindowedFFTStage.cpp
@@ -40,7 +41,6 @@ set(DISSONANCE_SOURCES
 if(BUILD_NODE_ADDON)
         add_library(dissonance_core SHARED
                 src/addon/addon.cpp
-                src/addon/AddonHelpers.cpp
                 ${DISSONANCE_SOURCES}
         )
         target_include_directories(dissonance_core PRIVATE

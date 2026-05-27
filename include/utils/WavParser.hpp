@@ -8,6 +8,15 @@
 
 #include "core/Errors.hpp"
 
+/**
+ * @brief RIFF/WAV file parser.
+ *
+ * Reads and validates a WAV file header and optionally decodes the audio
+ * data into normalised floats in [-1, 1]. Supports PCM 8/16/24/32-bit and
+ * IEEE float 32/64-bit formats. Unknown chunks are preserved verbatim.
+ *
+ * @throws dissonance::WavFormatError on malformed or unsupported input.
+ */
 class Parser {
   public:
     Parser() = default;

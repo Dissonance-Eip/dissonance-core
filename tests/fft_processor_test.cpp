@@ -50,7 +50,7 @@ TEST(FFTProcessorTest, MagnitudeMatchesSize) {
 
 TEST(FFTProcessorTest, ThrowsOnEmptyInput) {
     std::vector<float> emptyReal;
-    std::vector<std::complex<double>> emptyComplex;
+    std::vector<std::complex<float>> emptyComplex;
 
     EXPECT_THROW(fft::transform(emptyReal), dissonance::DspError);
     EXPECT_THROW(fft::inverse(emptyComplex), dissonance::DspError);

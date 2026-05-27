@@ -1,3 +1,12 @@
+/**
+ * @file WindowedFFTStage.cpp
+ * @brief Overlap-add windowed FFT low-pass filter stage.
+ *
+ * Processes each channel independently using 50% overlapping Hann-windowed
+ * frames. Bins above cutoffBin_ are zeroed before inverse FFT, implementing
+ * a spectral low-pass filter that is the primary protection mechanism.
+ */
+
 #include "audio/WindowedFFTStage.hpp"
 
 #include <algorithm>
@@ -37,11 +46,11 @@ void WindowedFFTStage::process(std::vector<float> &samples, uint16_t numChannels
             auto spectrum = fft::transform(block_);
 
             for (size_t k = cutoffBin_; k < spectrum.size(); ++k)
-                spectrum[k] = {0.0, 0.0};
+                spectrum[k] = {0.0f, 0.0f};
 
             auto reconstructed = fft::inverse(spectrum);
             for (size_t i = 0; i < frameSize_ && (offset + i) < totalFrames; ++i)
-                output[offset + i] += static_cast<float>(reconstructed[i]);
+                output[offset + i] += reconstructed[i];
         }
 
         for (size_t i = 0; i < totalFrames; ++i)
@@ -51,5 +60,5 @@ void WindowedFFTStage::process(std::vector<float> &samples, uint16_t numChannels
     if (progressCallback_)
         progressCallback_(1.0f);
 
-    framesProcessed_ = totalFrames;
+    framesProcessed_ = (totalFrames + hopSize_ - 1) / hopSize_;
 }

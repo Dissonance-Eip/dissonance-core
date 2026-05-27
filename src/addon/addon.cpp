@@ -1,108 +1,26 @@
-#include <napi.h>
-#include <fstream>
-#include <string>
-#include <complex>
+/**
+ * @file addon.cpp
+ * @brief Node.js native addon entry point.
+ *
+ * Exports two functions to JavaScript:
+ *   process(inputPath)      – runs the full audio protection pipeline
+ *                             asynchronously, resolves { ok, processedPath }.
+ *   readMetadata(inputPath) – reads WAV header and LIST/INFO tags without
+ *                             decoding audio, resolves { ok, audio, tags }.
+ */
 
-#include "addon/AddonHelpers.hpp"
+#include <fstream>
+
+#include <napi.h>
+
 #include "audio/WavProcessor.hpp"
-#include "audio/WindowFunctions.hpp"
-#include "audio/FFTProcessor.hpp"
+#include "utils/WavParser.hpp"
 #include "utils/WavUtils.hpp"
-#include "core/Errors.hpp"
 
 namespace {
 
 // ---------------------------------------------------------------------------
-// Float32Array helpers
-// ---------------------------------------------------------------------------
-
-std::vector<float> readFloat32Array(const Napi::CallbackInfo &info, uint32_t idx, const char *ctx) {
-    Napi::Env env = info.Env();
-    if (idx >= info.Length() || !info[idx].IsTypedArray())
-        throw Napi::TypeError::New(env, std::string(ctx) + " must be a Float32Array");
-    Napi::TypedArray ta = info[idx].As<Napi::TypedArray>();
-    if (ta.TypedArrayType() != napi_float32_array)
-        throw Napi::TypeError::New(env, std::string(ctx) + " must be a Float32Array");
-    Napi::Float32Array fa = ta.As<Napi::Float32Array>();
-    std::vector<float> result(fa.ElementLength());
-    for (size_t i = 0; i < fa.ElementLength(); ++i)
-        result[i] = fa[i];
-    return result;
-}
-
-Napi::Float32Array makeFloat32Array(Napi::Env env, const std::vector<float> &values) {
-    Napi::Float32Array arr = Napi::Float32Array::New(env, values.size());
-    for (size_t i = 0; i < values.size(); ++i)
-        arr[i] = values[i];
-    return arr;
-}
-
-Napi::Float32Array makeFloat32ArrayFromDouble(Napi::Env env, const std::vector<double> &values) {
-    Napi::Float32Array arr = Napi::Float32Array::New(env, values.size());
-    for (size_t i = 0; i < values.size(); ++i)
-        arr[i] = static_cast<float>(values[i]);
-    return arr;
-}
-
-Napi::Object makeSpectrumObject(Napi::Env env, const std::vector<std::complex<double>> &spectrum) {
-    Napi::Float32Array real = Napi::Float32Array::New(env, spectrum.size());
-    Napi::Float32Array imag = Napi::Float32Array::New(env, spectrum.size());
-    for (size_t i = 0; i < spectrum.size(); ++i) {
-        real[i] = static_cast<float>(spectrum[i].real());
-        imag[i] = static_cast<float>(spectrum[i].imag());
-    }
-    Napi::Object obj = Napi::Object::New(env);
-    obj.Set("real", real);
-    obj.Set("imag", imag);
-    return obj;
-}
-
-std::vector<std::complex<double>> readSpectrumObject(Napi::Env env, const Napi::Object &obj,
-                                                     const char *ctx) {
-    if (!obj.Has("real") || !obj.Has("imag"))
-        throw Napi::TypeError::New(env,
-                                   std::string(ctx) + " must have real and imag Float32Arrays");
-    Napi::Value realVal = obj.Get("real");
-    Napi::Value imagVal = obj.Get("imag");
-    if (!realVal.IsTypedArray() || !imagVal.IsTypedArray())
-        throw Napi::TypeError::New(env, std::string(ctx) + " real and imag must be Float32Arrays");
-    Napi::Float32Array realArr = realVal.As<Napi::Float32Array>();
-    Napi::Float32Array imagArr = imagVal.As<Napi::Float32Array>();
-    if (realArr.ElementLength() != imagArr.ElementLength())
-        throw Napi::TypeError::New(env,
-                                   std::string(ctx) + " real and imag must have the same length");
-    std::vector<std::complex<double>> result(realArr.ElementLength());
-    for (size_t i = 0; i < realArr.ElementLength(); ++i)
-        result[i] = {static_cast<double>(realArr[i]), static_cast<double>(imagArr[i])};
-    return result;
-}
-
-Napi::Object buildProcessResult(Napi::Env env, const ProcessedWav &processed) {
-    Napi::Object listTags = Napi::Object::New(env);
-    listTags.Set("title", Napi::String::New(env, processed.listTags.title));
-    listTags.Set("artist", Napi::String::New(env, processed.listTags.artist));
-    listTags.Set("comment", Napi::String::New(env, processed.listTags.comment));
-    listTags.Set("date", Napi::String::New(env, processed.listTags.date));
-    listTags.Set("software", Napi::String::New(env, processed.listTags.software));
-    listTags.Set("genre", Napi::String::New(env, processed.listTags.genre));
-    listTags.Set("copyright", Napi::String::New(env, processed.listTags.copyright));
-
-    Napi::Object result = Napi::Object::New(env);
-    result.Set("metadata", makeMetadataObject(env, processed.parser));
-    result.Set("otherChunks", makeOtherChunks(env, processed.parser));
-    result.Set("metadataText", Napi::String::New(env, processed.metadataText));
-    result.Set("waveformText", Napi::String::New(env, processed.waveformText));
-    result.Set("listTags", listTags);
-    result.Set("processedPath", Napi::String::New(env, processed.processedPath));
-    result.Set("fftApplied", Napi::Boolean::New(env, processed.fftReport.applied));
-    result.Set("fftFramesProcessed", Napi::Number::New(env, processed.fftReport.framesProcessed));
-    result.Set("fftBins", Napi::Number::New(env, processed.fftReport.bins));
-    result.Set("fftCutoffBin", Napi::Number::New(env, processed.fftReport.cutoffBin));
-    return result;
-}
-
-// ---------------------------------------------------------------------------
-// Async worker for process()
+// process()
 // ---------------------------------------------------------------------------
 
 class ProcessWorker : public Napi::AsyncWorker {
@@ -110,22 +28,10 @@ class ProcessWorker : public Napi::AsyncWorker {
     ProcessWorker(Napi::Env env, std::string inputPath, ProcessingOptions opts,
                   Napi::Promise::Deferred deferred)
         : Napi::AsyncWorker(env), inputPath_(std::move(inputPath)), opts_(std::move(opts)),
-          deferred_(std::move(deferred)), hasProgress_(false) {}
-
-    void setProgressCallback(Napi::ThreadSafeFunction tsfn) {
-        tsfn_ = std::move(tsfn);
-        hasProgress_ = true;
-    }
+          deferred_(std::move(deferred)) {}
 
     void Execute() override {
         try {
-            if (hasProgress_) {
-                opts_.progressCallback = [this](float progress) {
-                    tsfn_.NonBlockingCall([progress](Napi::Env env, Napi::Function cb) {
-                        cb.Call({Napi::Number::New(env, progress)});
-                    });
-                };
-            }
             result_ = processWavFile(inputPath_, opts_);
         } catch (const std::exception &e) {
             SetError(e.what());
@@ -133,214 +39,207 @@ class ProcessWorker : public Napi::AsyncWorker {
     }
 
     void OnOK() override {
-        if (hasProgress_)
-            tsfn_.Release();
-        deferred_.Resolve(buildProcessResult(Env(), result_));
+        Napi::Object result = Napi::Object::New(Env());
+        result.Set("ok", Napi::Boolean::New(Env(), true));
+        result.Set("processedPath", Napi::String::New(Env(), result_.processedPath));
+        deferred_.Resolve(result);
     }
 
-    void OnError(const Napi::Error &e) override {
-        if (hasProgress_)
-            tsfn_.Release();
-        deferred_.Reject(e.Value());
-    }
+    void OnError(const Napi::Error &e) override { deferred_.Reject(e.Value()); }
 
   private:
     std::string inputPath_;
     ProcessingOptions opts_;
     ProcessedWav result_;
     Napi::Promise::Deferred deferred_;
-    Napi::ThreadSafeFunction tsfn_;
-    bool hasProgress_;
 };
 
-// ---------------------------------------------------------------------------
-// N-API exports
-// ---------------------------------------------------------------------------
-
+// process(inputPath: string, options?: { outputPath?: string, perturbation?: number })
+//   inputPath              – WAV file to process (required)
+//   options.outputPath     – optional destination. Defaults to
+//                            <inputDir>/<stem>-processed.wav (CLI / tests).
+//                            The UI always supplies a temp path.
+//   options.perturbation   – perturbation strength in [0, 1]. Defaults to the
+//                            ProcessingOptions default if omitted.
 Napi::Value Process(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
-
     if (info.Length() < 1 || !info[0].IsString())
         throw Napi::TypeError::New(env, "Input path must be a string");
-
-    const std::string inputPath = info[0].As<Napi::String>();
 
     ProcessingOptions opts;
     if (info.Length() >= 2 && info[1].IsObject()) {
-        Napi::Object o = info[1].As<Napi::Object>();
-        if (o.Has("gain") && o.Get("gain").IsNumber())
-            opts.gain = o.Get("gain").As<Napi::Number>().DoubleValue();
-        if (o.Has("outputPath") && o.Get("outputPath").IsString())
-            opts.outputPath = o.Get("outputPath").As<Napi::String>().Utf8Value();
+        Napi::Object jsOpts = info[1].As<Napi::Object>();
+
+        if (jsOpts.Has("outputPath")) {
+            Napi::Value v = jsOpts.Get("outputPath");
+            if (v.IsString())
+                opts.outputPath = v.As<Napi::String>().Utf8Value();
+        }
+        if (jsOpts.Has("perturbation")) {
+            Napi::Value v = jsOpts.Get("perturbation");
+            if (v.IsNumber())
+                opts.perturbation = static_cast<float>(v.As<Napi::Number>().DoubleValue());
+        }
     }
 
     auto deferred = Napi::Promise::Deferred::New(env);
-    auto worker = std::make_unique<ProcessWorker>(env, inputPath, std::move(opts), deferred);
-
-    if (info.Length() >= 3 && info[2].IsFunction()) {
-        auto tsfn = Napi::ThreadSafeFunction::New(env, info[2].As<Napi::Function>(),
-                                                  "processProgress", 0, 1);
-        worker->setProgressCallback(std::move(tsfn));
-    }
-
-    worker.release()->Queue();
+    (new ProcessWorker(env, info[0].As<Napi::String>(), std::move(opts), deferred))->Queue();
     return deferred.Promise();
 }
 
-Napi::Value Inspect(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
+// ---------------------------------------------------------------------------
+// readMetadata()
+// ---------------------------------------------------------------------------
 
+class ReadMetadataWorker : public Napi::AsyncWorker {
+  public:
+    ReadMetadataWorker(Napi::Env env, std::string inputPath, Napi::Promise::Deferred deferred)
+        : Napi::AsyncWorker(env), inputPath_(std::move(inputPath)), deferred_(std::move(deferred)) {
+    }
+
+    void Execute() override {
+        try {
+            std::ifstream file(inputPath_, std::ios::binary);
+            if (!file.is_open())
+                throw std::runtime_error("Failed to open file: " + inputPath_);
+
+            // readAudioData = false — header only, no sample decode.
+            parser_ = Parser::fromFile(file, false);
+
+            const auto &chunks = parser_.getOtherChunks();
+            if (auto it = chunks.find("LIST"); it != chunks.end())
+                tags_ = parseListChunk(it->second);
+        } catch (const std::exception &e) {
+            SetError(e.what());
+        }
+    }
+
+    void OnOK() override {
+        Napi::Env env = Env();
+
+        Napi::Object audio = Napi::Object::New(env);
+        audio.Set("audioFormat", Napi::Number::New(env, parser_.getAudioFormat()));
+        audio.Set("numChannels", Napi::Number::New(env, parser_.getNumChannels()));
+        audio.Set("sampleRate", Napi::Number::New(env, parser_.getSampleRate()));
+        audio.Set("byteRate", Napi::Number::New(env, parser_.getByteRate()));
+        audio.Set("blockAlign", Napi::Number::New(env, parser_.getBlockAlign()));
+        audio.Set("bitsPerSample", Napi::Number::New(env, parser_.getBitsPerSample()));
+
+        // Derive sample count from the data chunk size.
+        const uint32_t dataSize = parser_.getSubchunk2Size();
+        const uint16_t bps = parser_.getBitsPerSample();
+        const uint16_t channels = parser_.getNumChannels();
+        const uint32_t rate = parser_.getSampleRate();
+        const uint32_t bpsBytes = bps > 0 ? bps / 8 : 0;
+        const double durationSec =
+            (bpsBytes > 0 && channels > 0 && rate > 0)
+                ? static_cast<double>(dataSize) / (bpsBytes * channels * rate)
+                : 0.0;
+        audio.Set("durationSec", Napi::Number::New(env, durationSec));
+
+        Napi::Object tags = Napi::Object::New(env);
+        tags.Set("title", Napi::String::New(env, tags_.title));
+        tags.Set("artist", Napi::String::New(env, tags_.artist));
+        tags.Set("comment", Napi::String::New(env, tags_.comment));
+        tags.Set("date", Napi::String::New(env, tags_.date));
+        tags.Set("genre", Napi::String::New(env, tags_.genre));
+        tags.Set("software", Napi::String::New(env, tags_.software));
+        tags.Set("copyright", Napi::String::New(env, tags_.copyright));
+
+        Napi::Object result = Napi::Object::New(env);
+        result.Set("ok", Napi::Boolean::New(env, true));
+        result.Set("audio", audio);
+        result.Set("tags", tags);
+        deferred_.Resolve(result);
+    }
+
+    void OnError(const Napi::Error &e) override { deferred_.Reject(e.Value()); }
+
+  private:
+    std::string inputPath_;
+    Parser parser_;
+    ListTags tags_;
+    Napi::Promise::Deferred deferred_;
+};
+
+Napi::Value ReadMetadata(const Napi::CallbackInfo &info) {
+    Napi::Env env = info.Env();
     if (info.Length() < 1 || !info[0].IsString())
         throw Napi::TypeError::New(env, "Input path must be a string");
 
-    const std::string inputPath = info[0].As<Napi::String>();
+    auto deferred = Napi::Promise::Deferred::New(env);
+    (new ReadMetadataWorker(env, info[0].As<Napi::String>(), deferred))->Queue();
+    return deferred.Promise();
+}
 
-    try {
-        std::ifstream file(inputPath, std::ios::binary);
-        if (!file.is_open())
-            throw dissonance::WavFormatError("Failed to open file: " + inputPath);
+// ---------------------------------------------------------------------------
+// writeTags()
+// ---------------------------------------------------------------------------
 
-        const Parser parser = Parser::fromFile(file, false);
+class WriteTagsWorker : public Napi::AsyncWorker {
+  public:
+    WriteTagsWorker(Napi::Env env, std::string filePath, ListTags tags,
+                    Napi::Promise::Deferred deferred)
+        : Napi::AsyncWorker(env), filePath_(std::move(filePath)), tags_(std::move(tags)),
+          deferred_(std::move(deferred)) {}
 
-        Napi::Object listTags = Napi::Object::New(env);
-        if (auto it = parser.getOtherChunks().find("LIST"); it != parser.getOtherChunks().end()) {
-            const ListTags tags = parseListChunk(it->second);
-            listTags.Set("title", Napi::String::New(env, tags.title));
-            listTags.Set("artist", Napi::String::New(env, tags.artist));
-            listTags.Set("comment", Napi::String::New(env, tags.comment));
-            listTags.Set("date", Napi::String::New(env, tags.date));
-            listTags.Set("software", Napi::String::New(env, tags.software));
-            listTags.Set("genre", Napi::String::New(env, tags.genre));
-            listTags.Set("copyright", Napi::String::New(env, tags.copyright));
-        } else {
-            for (const char *k :
-                 {"title", "artist", "comment", "date", "software", "genre", "copyright"})
-                listTags.Set(k, Napi::String::New(env, ""));
+    void Execute() override {
+        try {
+            writeTagsToWav(filePath_, tags_);
+        } catch (const std::exception &e) {
+            SetError(e.what());
         }
-
-        Napi::Object result = Napi::Object::New(env);
-        result.Set("metadata", makeMetadataObject(env, parser));
-        result.Set("otherChunks", makeOtherChunks(env, parser));
-        result.Set("metadataText", Napi::String::New(env, formatMetadataText(parser)));
-        result.Set("listTags", listTags);
-        return result;
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
     }
-}
 
-// --- Test/internal DSP exports ---
+    void OnOK() override {
+        Napi::Object result = Napi::Object::New(Env());
+        result.Set("ok", Napi::Boolean::New(Env(), true));
+        deferred_.Resolve(result);
+    }
 
-Napi::Value GenerateWindow(const Napi::CallbackInfo &info) {
+    void OnError(const Napi::Error &e) override { deferred_.Reject(e.Value()); }
+
+  private:
+    std::string filePath_;
+    ListTags tags_;
+    Napi::Promise::Deferred deferred_;
+};
+
+Napi::Value WriteTags(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsObject())
+        throw Napi::TypeError::New(env, "Expected (filePath: string, tags: object)");
 
-    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber())
-        throw Napi::TypeError::New(env, "Expected (windowType: string, size: number)");
+    const std::string filePath = info[0].As<Napi::String>();
+    Napi::Object obj = info[1].As<Napi::Object>();
 
-    const std::string typeStr = info[0].As<Napi::String>();
-    const size_t size = info[1].As<Napi::Number>().Uint32Value();
+    auto str = [&](const char *key) -> std::string {
+        if (!obj.Has(key))
+            return {};
+        Napi::Value v = obj.Get(key);
+        return v.IsString() ? v.As<Napi::String>().Utf8Value() : std::string{};
+    };
 
-    window::Type type;
-    if (typeStr == "hann")
-        type = window::Type::Hann;
-    else if (typeStr == "hamming")
-        type = window::Type::Hamming;
-    else
-        throw Napi::TypeError::New(env, "Window type must be 'hann' or 'hamming'");
+    ListTags tags;
+    tags.title = str("title");
+    tags.artist = str("artist");
+    tags.comment = str("comment");
+    tags.date = str("date");
+    tags.genre = str("genre");
+    tags.software = str("software");
+    tags.copyright = str("copyright");
 
-    try {
-        return makeFloat32ArrayFromDouble(env, window::generate(type, size));
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
-    }
+    auto deferred = Napi::Promise::Deferred::New(env);
+    (new WriteTagsWorker(env, filePath, std::move(tags), deferred))->Queue();
+    return deferred.Promise();
 }
 
-Napi::Value ApplyWindow(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 2)
-        throw Napi::TypeError::New(env, "Expected (samples: Float32Array, window: Float32Array)");
-
-    try {
-        std::vector<float> samples = readFloat32Array(info, 0, "samples");
-        std::vector<float> winF = readFloat32Array(info, 1, "window");
-
-        if (samples.size() != winF.size())
-            throw Napi::TypeError::New(env, "Sample and window arrays must have the same length");
-
-        const std::vector<double> winD(winF.begin(), winF.end());
-        window::apply(samples, winD);
-
-        return makeFloat32Array(env, samples);
-    } catch (const Napi::Error &) {
-        throw;
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
-    }
-}
-
-Napi::Value FFT(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 1)
-        throw Napi::TypeError::New(env, "Expected (samples: Float32Array)");
-
-    try {
-        const std::vector<float> samples = readFloat32Array(info, 0, "samples");
-        if (samples.empty())
-            throw Napi::TypeError::New(env, "Input array cannot be empty");
-        return makeSpectrumObject(env, fft::transform(samples));
-    } catch (const Napi::Error &) {
-        throw;
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
-    }
-}
-
-Napi::Value IFFT(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 1 || !info[0].IsObject())
-        throw Napi::TypeError::New(env,
-                                   "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
-
-    try {
-        const auto spectrum = readSpectrumObject(env, info[0].As<Napi::Object>(), "spectrum");
-        if (spectrum.empty())
-            throw Napi::TypeError::New(env, "Spectrum cannot be empty");
-        return makeFloat32ArrayFromDouble(env, fft::inverse(spectrum));
-    } catch (const Napi::Error &) {
-        throw;
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
-    }
-}
-
-Napi::Value FFTMagnitude(const Napi::CallbackInfo &info) {
-    Napi::Env env = info.Env();
-
-    if (info.Length() < 1 || !info[0].IsObject())
-        throw Napi::TypeError::New(env,
-                                   "Expected (spectrum: {real: Float32Array, imag: Float32Array})");
-
-    try {
-        const auto spectrum = readSpectrumObject(env, info[0].As<Napi::Object>(), "spectrum");
-        return makeFloat32ArrayFromDouble(env, fft::magnitude(spectrum));
-    } catch (const Napi::Error &) {
-        throw;
-    } catch (const std::exception &e) {
-        throw Napi::Error::New(env, e.what());
-    }
-}
+// ---------------------------------------------------------------------------
 
 Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("process", Napi::Function::New(env, Process));
-    exports.Set("inspect", Napi::Function::New(env, Inspect));
-    exports.Set("generateWindow", Napi::Function::New(env, GenerateWindow));
-    exports.Set("applyWindow", Napi::Function::New(env, ApplyWindow));
-    exports.Set("fft", Napi::Function::New(env, FFT));
-    exports.Set("ifft", Napi::Function::New(env, IFFT));
-    exports.Set("fftMagnitude", Napi::Function::New(env, FFTMagnitude));
+    exports.Set("readMetadata", Napi::Function::New(env, ReadMetadata));
+    exports.Set("writeTags", Napi::Function::New(env, WriteTags));
     return exports;
 }
 

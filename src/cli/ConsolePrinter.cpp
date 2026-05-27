@@ -1,3 +1,8 @@
+/**
+ * @file ConsolePrinter.cpp
+ * @brief Coloured terminal output for WAV metadata, chunks, and waveform.
+ */
+
 #include "cli/ConsolePrinter.hpp"
 #include "utils/WavUtils.hpp"
 #include "core/Errors.hpp"

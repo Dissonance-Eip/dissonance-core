@@ -1,3 +1,8 @@
+/**
+ * @file Commands.cpp
+ * @brief CLI sub-command implementations: info, process, fft.
+ */
+
 #include "cli/Commands.hpp"
 #include "cli/ConsolePrinter.hpp"
 #include "audio/WavProcessor.hpp"
@@ -25,11 +30,13 @@ void Commands::printUsage(const char *programName) {
               << "  --full              Average spectrum across entire file (Welch's method)\n"
               << "  --sort              Sort displayed bins by magnitude (loudest first)\n"
               << "\nOptions for 'process':\n"
-              << "  --gain <value>      Apply gain (default: 0.8)\n"
-              << "  --output <path>     Output file path (default: <input>-processed.wav)\n"
+              << "  --gain <value>          Apply gain (default: 0.8)\n"
+              << "  --perturbation <0..1>   Noise strength for AI-disruption (default: 0.5)\n"
+              << "  --output <path>         Output file path (default: <input>-processed.wav)\n"
               << "\nExamples:\n"
               << "  " << programName << " info sound.wav\n"
-              << "  " << programName << " process sound.wav --gain 0.5 --output output.wav\n"
+              << "  " << programName
+              << " process sound.wav --gain 0.5 --perturbation 0.8 --output output.wav\n"
               << "  " << programName << " fft sound.wav --full --sort\n";
 }
 
@@ -53,6 +60,8 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
     for (int i = startIdx; i < argc; ++i) {
         if (std::string(argv[i]) == "--gain" && i + 1 < argc) {
             opts.gain = std::stod(argv[++i]);
+        } else if (std::string(argv[i]) == "--perturbation" && i + 1 < argc) {
+            opts.perturbation = static_cast<float>(std::stod(argv[++i]));
         } else if (std::string(argv[i]) == "--output" && i + 1 < argc) {
             opts.outputPath = argv[++i];
         }
@@ -68,6 +77,10 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
         printField("FFT frames", std::to_string(result.fftReport.framesProcessed));
         printField("FFT bins", std::to_string(result.fftReport.bins));
         printField("Cutoff bin", std::to_string(result.fftReport.cutoffBin));
+    }
+    if (opts.perturbation > 0.0f) {
+        printField("Perturbation strength", std::to_string(opts.perturbation));
+        printField("Perturbation RMS", std::to_string(result.perturbationRmsDbfs) + " dBFS");
     }
     return EXIT_SUCCESS;
 }
@@ -103,13 +116,13 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
     constexpr size_t frameSize = 512;
     constexpr size_t hopSize = 256;
 
-    const std::vector<double> win = window::generate(window::Type::Hann, frameSize);
+    const std::vector<float> win = window::generate(window::Type::Hann, frameSize);
 
     std::cout << "\n=== FFT Analysis ===\n";
     printField("Channels", std::to_string(numChannels));
     printField("Sample rate", std::to_string(sampleRate) + " Hz");
 
-    std::vector<double> accumulated(frameSize, 0.0);
+    std::vector<float> accumulated(frameSize, 0.0);
     size_t windowCount = 0;
 
     if (fullFile) {
@@ -160,7 +173,7 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
 
     // Normalize to per-window average — only use positive-frequency half
     const size_t halfBins = frameSize / 2;
-    std::vector<double> mags(halfBins);
+    std::vector<float> mags(halfBins);
     for (size_t k = 0; k < halfBins; ++k)
         mags[k] = accumulated[k] / static_cast<double>(windowCount);
 

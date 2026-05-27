@@ -1,6 +1,6 @@
 {
   "name": "dissonance-core",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "main": "index.js",
   "gypfile": true,
   "scripts": {
@@ -10,7 +10,7 @@
     "build:cli:debug": "node scripts/build-cli.js --config=Debug",
     "build:cli:release": "node scripts/build-cli.js --config=Release",
     "build:local": "npm run build:addon:dist && npm run build:cli:debug",
-    "test": "node tests/js/test-fft.js && node tests/js/test-gain.js && node tests/js/test-window.js",
+    "test": "echo \"JS tests removed — DSP covered by CTest\"",
     "format:cpp": "node scripts/clang-format.js",
     "format:cpp:check": "node scripts/clang-format.js --check",
     "cppcheck": "node scripts/cppcheck.js"
