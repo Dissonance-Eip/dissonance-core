@@ -3,7 +3,7 @@
  * @brief Top-level audio processing entry point.
  *
  * processWavFile() reads a WAV, runs it through the Pipeline
- * (GainStage → WindowedFFTStage → PerturbationStage), writes the output,
+ * (GainStage → WindowedFFTStage → PerturbationStage(s)), writes the output,
  * and returns a ProcessedWav with metadata and statistics.
  */
 
@@ -11,6 +11,7 @@
 #include "core/Errors.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -72,6 +73,22 @@ void writeWavFile(const Parser &parser, const std::vector<float> &samples,
     }
 }
 
+float computePerturbationRmsDbfs(const std::vector<float> &original,
+                                 const std::vector<float> &processed) {
+    if (original.empty() || original.size() != processed.size())
+        return PerturbationStage::kSilentDbfs;
+
+    double sumSq = 0.0;
+    for (size_t i = 0; i < original.size(); ++i) {
+        double diff = static_cast<double>(processed[i]) - static_cast<double>(original[i]);
+        sumSq += diff * diff;
+    }
+
+    const double rms = std::sqrt(sumSq / static_cast<double>(original.size()));
+    return (rms > 0.0) ? static_cast<float>(20.0 * std::log10(rms))
+                       : PerturbationStage::kSilentDbfs;
+}
+
 } // namespace
 
 ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOptions &opts) {
@@ -92,23 +109,33 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
 
     // Seed the RNG from file characteristics so the perturbation is repeatable
     // for the same input but unique per file.
-    const uint64_t seed = static_cast<uint64_t>(parser.getSampleRate()) *
-                          static_cast<uint64_t>(result.originalSamples.size());
-    auto perturbOwned =
-        std::make_unique<PerturbationStage>(opts.perturbation, parser.getSampleRate(), seed);
-    const PerturbationStage *perturbStage = perturbOwned.get();
+    const uint64_t baseSeed = static_cast<uint64_t>(parser.getSampleRate()) *
+                              static_cast<uint64_t>(result.originalSamples.size());
 
     Pipeline pipeline;
     pipeline.addStage(std::make_unique<GainStage>(opts.gain));
     pipeline.addStage(std::move(fftOwned));
-    pipeline.addStage(std::move(perturbOwned));
+
+    // Create one PerturbationStage per requested mode, each with a unique seed offset.
+    // Legacy path: when no modes are specified but perturbation > 0, fall back to white_noise.
+    std::vector<std::string> modes = opts.perturbationModes;
+    if (modes.empty() && opts.perturbation > 0.0f)
+        modes.push_back("white_noise");
+
+    for (size_t i = 0; i < modes.size(); ++i) {
+        const uint64_t modeSeed = baseSeed + static_cast<uint64_t>(i) * 0x9E3779B97F4A7C15ull;
+        pipeline.addStage(std::make_unique<PerturbationStage>(modes[i], opts.perturbation,
+                                                              parser.getSampleRate(), modeSeed));
+    }
+
     pipeline.run(result.processedSamples, parser.getNumChannels());
 
     if (fftStage->framesProcessed() > 0)
         result.fftReport = {true, fftStage->framesProcessed(), fftStage->bins(),
                             fftStage->cutoffBin()};
 
-    result.perturbationRmsDbfs = perturbStage->rmsDbfs();
+    result.perturbationRmsDbfs = computePerturbationRmsDbfs(result.originalSamples,
+                                                            result.processedSamples);
 
     result.processedPath = makeOutputPath(inputPath, opts.outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);

@@ -31,7 +31,18 @@ void Commands::printUsage(const char *programName) {
               << "  --sort              Sort displayed bins by magnitude (loudest first)\n"
               << "\nOptions for 'process':\n"
               << "  --gain <value>          Apply gain (default: 0.8)\n"
-              << "  --perturbation <0..1>   Noise strength for AI-disruption (default: 0.5)\n"
+              << "  --perturbation <0..1>   Per-mode noise strength (default: 0.5)\n"
+              << "  --mode <name>           Perturbation mode (";
+    bool first = true;
+    const std::vector<std::string> knownModes = {"white_noise", "phase_distortion", "spectral_gate",
+                                                  "pink_noise"};
+    for (const auto &m : knownModes) {
+        if (!first)
+            std::cout << ", ";
+        first = false;
+        std::cout << m;
+    }
+    std::cout << "). Repeatable — modes stack in order.\n"
               << "  --output <path>         Output file path (default: <input>-processed.wav)\n"
               << "\nExamples:\n"
               << "  " << programName << " info sound.wav\n"
@@ -62,6 +73,8 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
             opts.gain = std::stod(argv[++i]);
         } else if (std::string(argv[i]) == "--perturbation" && i + 1 < argc) {
             opts.perturbation = static_cast<float>(std::stod(argv[++i]));
+        } else if (std::string(argv[i]) == "--mode" && i + 1 < argc) {
+            opts.perturbationModes.push_back(argv[++i]);
         } else if (std::string(argv[i]) == "--output" && i + 1 < argc) {
             opts.outputPath = argv[++i];
         }
@@ -78,7 +91,16 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
         printField("FFT bins", std::to_string(result.fftReport.bins));
         printField("Cutoff bin", std::to_string(result.fftReport.cutoffBin));
     }
-    if (opts.perturbation > 0.0f) {
+    if (!opts.perturbationModes.empty()) {
+        std::string modesStr;
+        for (size_t i = 0; i < opts.perturbationModes.size(); ++i) {
+            if (i > 0) modesStr += ", ";
+            modesStr += opts.perturbationModes[i];
+        }
+        printField("Perturbation modes", modesStr);
+        printField("Perturbation strength", std::to_string(opts.perturbation));
+        printField("Perturbation RMS", std::to_string(result.perturbationRmsDbfs) + " dBFS");
+    } else if (opts.perturbation > 0.0f) {
         printField("Perturbation strength", std::to_string(opts.perturbation));
         printField("Perturbation RMS", std::to_string(result.perturbationRmsDbfs) + " dBFS");
     }
