@@ -54,13 +54,20 @@ class ProcessWorker : public Napi::AsyncWorker {
     Napi::Promise::Deferred deferred_;
 };
 
-// process(inputPath: string, options?: { outputPath?: string, perturbation?: number })
+// process(inputPath: string, options?: {
+//   outputPath?: string,
+//   perturbation?: number,
+//   modes?: string[]
+// })
 //   inputPath              – WAV file to process (required)
 //   options.outputPath     – optional destination. Defaults to
 //                            <inputDir>/<stem>-processed.wav (CLI / tests).
 //                            The UI always supplies a temp path.
-//   options.perturbation   – perturbation strength in [0, 1]. Defaults to the
+//   options.perturbation   – per-mode noise strength in [0, 1]. Defaults to
 //                            ProcessingOptions default if omitted.
+//   options.modes          – perturbation strategy names. When non-empty these
+//                            are stacked in pipeline order. When empty the
+//                            legacy single float perturbation is used.
 Napi::Value Process(const Napi::CallbackInfo &info) {
     Napi::Env env = info.Env();
     if (info.Length() < 1 || !info[0].IsString())
@@ -79,6 +86,14 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
             Napi::Value v = jsOpts.Get("perturbation");
             if (v.IsNumber())
                 opts.perturbation = static_cast<float>(v.As<Napi::Number>().DoubleValue());
+        }
+        if (jsOpts.Has("modes") && jsOpts.Get("modes").IsArray()) {
+            Napi::Array modes = jsOpts.Get("modes").As<Napi::Array>();
+            for (uint32_t i = 0; i < modes.Length(); ++i) {
+                Napi::Value v = modes.Get(i);
+                if (v.IsString())
+                    opts.perturbationModes.push_back(v.As<Napi::String>().Utf8Value());
+            }
         }
     }
 

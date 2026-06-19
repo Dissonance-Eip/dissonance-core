@@ -85,8 +85,9 @@ cmake-build/Debug/dissonance.core fft <file.wav> --full --sort
 Flags accepted by `process`:
 
 - `--gain <0..1>` — linear amplitude gain applied after FFT filtering
-- `--perturbation <0..1>` — strength of the sub-perceptual noise injected
-  for AI-disruption (the same parameter exposed by the UI's Protection slider)
+- `--perturbation <0..1>` — per-mode noise strength (default: 0.5)
+- `--mode <name>` — perturbation strategy: `white_noise`, `phase_distortion`,
+  `spectral_gate`, or `pink_noise`. Repeatable — modes stack in order.
 - `--output <path>` — destination path; defaults to `<inputDir>/<stem>-processed.wav`
 
 ## Testing
