@@ -27,7 +27,7 @@ TEST(PerturbationStageTest, ZeroStrengthIsPassthrough) {
     std::vector<float> samples = makeDc(4096);
     std::vector<float> original = samples;
 
-    PerturbationStage stage(0.0f, 44100, 42);
+    PerturbationStage stage("white_noise", 0.0f, 44100, 42);
     stage.process(samples, 1);
 
     EXPECT_EQ(samples, original);
@@ -42,7 +42,7 @@ TEST(PerturbationStageTest, PositiveStrengthModifiesSignal) {
     std::vector<float> samples = makeDc(4096);
     std::vector<float> original = samples;
 
-    PerturbationStage stage(1.0f, 44100, 42);
+    PerturbationStage stage("white_noise", 1.0f, 44100, 42);
     stage.process(samples, 1);
 
     EXPECT_NE(samples, original);
@@ -56,7 +56,7 @@ TEST(PerturbationStageTest, OutputClampedToValidRange) {
     // Start near the rail to stress the clamp
     std::vector<float> samples(4096, 0.995f);
 
-    PerturbationStage stage(1.0f, 44100, 7);
+    PerturbationStage stage("white_noise", 1.0f, 44100, 7);
     stage.process(samples, 1);
 
     for (float s : samples) {
@@ -72,7 +72,7 @@ TEST(PerturbationStageTest, OutputClampedToValidRange) {
 TEST(PerturbationStageTest, RmsDbfsReportedAfterProcessing) {
     std::vector<float> samples(8192, 0.0f); // silent input — noise is easy to measure
 
-    PerturbationStage stage(1.0f, 44100, 99);
+    PerturbationStage stage("white_noise", 1.0f, 44100, 99);
     stage.process(samples, 1);
 
     // Noise was actually added (RMS > -200 dBFS sentinel)
@@ -91,8 +91,8 @@ TEST(PerturbationStageTest, DifferentSeedsProduceDifferentNoise) {
     std::vector<float> a(4096, 0.0f);
     std::vector<float> b(4096, 0.0f);
 
-    PerturbationStage stageA(0.5f, 44100, 1);
-    PerturbationStage stageB(0.5f, 44100, 2);
+    PerturbationStage stageA("white_noise", 0.5f, 44100, 1);
+    PerturbationStage stageB("white_noise", 0.5f, 44100, 2);
     stageA.process(a, 1);
     stageB.process(b, 1);
 
@@ -107,8 +107,8 @@ TEST(PerturbationStageTest, SameSeedIsDeterministic) {
     std::vector<float> a(4096, 0.3f);
     std::vector<float> b(4096, 0.3f);
 
-    PerturbationStage stageA(0.5f, 44100, 12345);
-    PerturbationStage stageB(0.5f, 44100, 12345);
+    PerturbationStage stageA("white_noise", 0.5f, 44100, 12345);
+    PerturbationStage stageB("white_noise", 0.5f, 44100, 12345);
     stageA.process(a, 1);
     stageB.process(b, 1);
 
@@ -124,7 +124,7 @@ TEST(PerturbationStageTest, StereoChannelsAreBothPerturbed) {
     const size_t frames = 2048;
     std::vector<float> samples(frames * 2, 0.0f);
 
-    PerturbationStage stage(1.0f, 44100, 77);
+    PerturbationStage stage("white_noise", 1.0f, 44100, 77);
     stage.process(samples, 2);
 
     // Collect each channel
@@ -148,7 +148,7 @@ TEST(PerturbationStageTest, StereoChannelsAreBothPerturbed) {
 
 TEST(PerturbationStageTest, EmptyBufferNoOp) {
     std::vector<float> samples;
-    PerturbationStage stage(1.0f, 44100, 0);
+    PerturbationStage stage("white_noise", 1.0f, 44100, 0);
     EXPECT_NO_THROW(stage.process(samples, 1));
     EXPECT_EQ(stage.rmsDbfs(), PerturbationStage::kSilentDbfs);
 }
@@ -161,8 +161,8 @@ TEST(PerturbationStageTest, StrengthClampedToOne) {
     std::vector<float> a(4096, 0.0f);
     std::vector<float> b(4096, 0.0f);
 
-    PerturbationStage stageA(1.0f, 44100, 5);
-    PerturbationStage stageB(999.0f, 44100, 5); // should clamp to 1
+    PerturbationStage stageA("white_noise", 1.0f, 44100, 5);
+    PerturbationStage stageB("white_noise", 999.0f, 44100, 5); // should clamp to 1
     stageA.process(a, 1);
     stageB.process(b, 1);
 

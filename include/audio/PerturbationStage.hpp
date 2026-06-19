@@ -40,7 +40,7 @@ class PerturbationStage : public AudioStage {
     float rmsDbfs() const { return rmsDbfs_; }
 
   private:
-    void applyWhiteNoise(std::vector<float> &noise, uint16_t numChannels);
+    static void applyWhiteNoise(const std::vector<float> &noise, uint16_t numChannels);
     void applyPhaseDistortion(std::vector<float> &noise, uint16_t numChannels);
     void applySpectralGate(std::vector<float> &noise, uint16_t numChannels);
     void applyPinkNoise(std::vector<float> &noise, uint16_t numChannels);

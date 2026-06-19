@@ -35,7 +35,7 @@ void Commands::printUsage(const char *programName) {
               << "  --mode <name>           Perturbation mode (";
     bool first = true;
     const std::vector<std::string> knownModes = {"white_noise", "phase_distortion", "spectral_gate",
-                                                  "pink_noise"};
+                                                 "pink_noise"};
     for (const auto &m : knownModes) {
         if (!first)
             std::cout << ", ";
@@ -94,7 +94,8 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
     if (!opts.perturbationModes.empty()) {
         std::string modesStr;
         for (size_t i = 0; i < opts.perturbationModes.size(); ++i) {
-            if (i > 0) modesStr += ", ";
+            if (i > 0)
+                modesStr += ", ";
             modesStr += opts.perturbationModes[i];
         }
         printField("Perturbation modes", modesStr);

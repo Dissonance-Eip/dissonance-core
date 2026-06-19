@@ -134,8 +134,8 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
         result.fftReport = {true, fftStage->framesProcessed(), fftStage->bins(),
                             fftStage->cutoffBin()};
 
-    result.perturbationRmsDbfs = computePerturbationRmsDbfs(result.originalSamples,
-                                                            result.processedSamples);
+    result.perturbationRmsDbfs =
+        computePerturbationRmsDbfs(result.originalSamples, result.processedSamples);
 
     result.processedPath = makeOutputPath(inputPath, opts.outputPath);
     writeWavFile(parser, result.processedSamples, result.processedPath);
