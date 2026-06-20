@@ -13,6 +13,7 @@
         "src/audio/WindowedFFTStage.cpp",
         "src/audio/WindowFunctions.cpp",
         "src/audio/FFTProcessor.cpp",
+        "src/audio/PsychoacousticModel.cpp",
         "vendor/kissfft/kiss_fft.c"
       ],
       "include_dirs": [

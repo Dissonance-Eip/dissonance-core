@@ -36,6 +36,7 @@ set(DISSONANCE_SOURCES
         src/audio/WindowedFFTStage.cpp
         src/audio/WindowFunctions.cpp
         src/audio/FFTProcessor.cpp
+        src/audio/PsychoacousticModel.cpp
 )
 
 if(BUILD_NODE_ADDON)

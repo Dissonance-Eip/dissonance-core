@@ -1,12 +1,13 @@
 /**
  * @file Commands.cpp
- * @brief CLI sub-command implementations: info, process, fft.
+ * @brief CLI sub-command implementations: info, process, fft, bark.
  */
 
 #include "cli/Commands.hpp"
 #include "cli/ConsolePrinter.hpp"
 #include "audio/WavProcessor.hpp"
 #include "audio/FFTProcessor.hpp"
+#include "audio/PsychoacousticModel.hpp"
 #include "audio/WindowFunctions.hpp"
 #include "core/Errors.hpp"
 #include <algorithm>
@@ -24,6 +25,9 @@ void Commands::printUsage(const char *programName) {
               << "  info          Print WAV file metadata and waveform\n"
               << "  process       Apply gain and spectral processing\n"
               << "  fft           Analyze FFT spectrum of a 512-frame block\n"
+              << "  bark          Show Bark-scale band mapping for FFT bins\n"
+              << "\nOptions for 'bark':\n"
+              << "  --frame-size <n>  FFT frame size in samples (default: 2048)\n"
               << "\nOptions for 'fft':\n"
               << "  --offset <seconds>  Start offset into the file (default: 0)\n"
               << "  --bins <n>          Number of frequency bins to display (default: 16)\n"
@@ -256,6 +260,73 @@ int Commands::handleFft(const std::string &inputPath, int argc, char **argv, int
 
         std::cout << std::left << std::setw(5) << idx << std::setw(12) << freq << std::setw(10)
                   << mag << std::string(bars, '#') << "\n";
+    }
+
+    return EXIT_SUCCESS;
+}
+
+int Commands::handleBark(const std::string &inputPath, int argc, char **argv, int startIdx) {
+    size_t frameSize = 2048;
+
+    for (int i = startIdx; i < argc; ++i) {
+        if (std::string(argv[i]) == "--frame-size" && i + 1 < argc)
+            frameSize = static_cast<size_t>(std::stoul(argv[++i]));
+    }
+
+    // ── Read WAV file ──
+    std::ifstream file(inputPath, std::ios::binary);
+    if (!file.is_open())
+        throw dissonance::WavFormatError("Failed to open file: " + inputPath);
+    Parser parser = Parser::fromFile(file);
+    file.close();
+
+    const uint32_t sampleRate = parser.getSampleRate();
+    const size_t halfBins = frameSize / 2;
+
+    // ── Print header ──
+    std::cout << "\n=== Bark-Scale Band Mapping ===\n";
+    printField("Sample rate", std::to_string(sampleRate) + " Hz");
+    printField("Frame size", std::to_string(frameSize) + " samples");
+    printField("Nyquist freq", std::to_string(sampleRate / 2) + " Hz");
+    printField("Total bands", std::to_string(PsychoacousticModel::kNumBarkBands));
+
+    // ── Build band summary ──
+    std::vector<size_t> binCount(PsychoacousticModel::kNumBarkBands, 0);
+    for (size_t i = 0; i <= halfBins; ++i) {
+        size_t band = PsychoacousticModel::binToBarkBand(i, sampleRate, frameSize);
+        ++binCount[band];
+    }
+
+    // ── Print band table ──
+    std::cout << "\nBand  Center (Hz)  Freq range             Bins  Example bin  Example freq\n";
+    std::cout << std::string(78, '-') << "\n";
+
+    for (size_t b = 0; b < PsychoacousticModel::kNumBarkBands; ++b) {
+        size_t firstBin = halfBins + 1;
+        size_t lastBin = 0;
+        for (size_t i = 0; i <= halfBins; ++i) {
+            if (PsychoacousticModel::binToBarkBand(i, sampleRate, frameSize) == b) {
+                firstBin = std::min(firstBin, i);
+                lastBin = std::max(lastBin, i);
+            }
+        }
+
+        float freqLow = static_cast<float>(firstBin) * static_cast<float>(sampleRate) /
+                        static_cast<float>(frameSize);
+        float freqHigh = static_cast<float>(lastBin) * static_cast<float>(sampleRate) /
+                         static_cast<float>(frameSize);
+
+        size_t midBin = (firstBin + lastBin) / 2;
+        float midFreq = static_cast<float>(midBin) * static_cast<float>(sampleRate) /
+                        static_cast<float>(frameSize);
+
+        std::vector<float> centers = PsychoacousticModel::barkBandCenters();
+
+        std::cout << std::setw(4) << b << "  " << std::setw(9) << std::fixed << std::setprecision(0)
+                  << centers[b] << "  " << std::setw(5) << static_cast<int>(freqLow) << " - "
+                  << std::setw(6) << static_cast<int>(freqHigh) << " Hz  " << std::setw(4)
+                  << binCount[b] << "  " << std::setw(11) << midBin << "  " << std::setw(10)
+                  << static_cast<int>(midFreq) << " Hz\n";
     }
 
     return EXIT_SUCCESS;
