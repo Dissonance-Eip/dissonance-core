@@ -37,6 +37,7 @@ set(DISSONANCE_SOURCES
         src/audio/WindowFunctions.cpp
         src/audio/FFTProcessor.cpp
         src/audio/PsychoacousticModel.cpp
+        src/audio/MaskingStage.cpp
 )
 
 if(BUILD_NODE_ADDON)

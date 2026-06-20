@@ -3,8 +3,9 @@
  * @brief Top-level audio processing entry point.
  *
  * processWavFile() reads a WAV, runs it through the Pipeline
- * (GainStage → WindowedFFTStage → PerturbationStage(s)), writes the output,
- * and returns a ProcessedWav with metadata and statistics.
+ * (GainStage → WindowedFFTStage → PerturbationStage(s) → MaskingStage),
+ * writes the output, and returns a ProcessedWav with metadata and
+ * statistics.
  */
 
 #include "audio/WavProcessor.hpp"
@@ -17,6 +18,7 @@
 #include <memory>
 
 #include "audio/GainStage.hpp"
+#include "audio/MaskingStage.hpp"
 #include "audio/PerturbationStage.hpp"
 #include "audio/Pipeline.hpp"
 #include "audio/WindowedFFTStage.hpp"
@@ -127,6 +129,11 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
         pipeline.addStage(std::make_unique<PerturbationStage>(modes[i], opts.perturbation,
                                                               parser.getSampleRate(), modeSeed));
     }
+
+    // MaskingStage: clamps spectral perturbation under psychoacoustic thresholds.
+    // Runs after all perturbation stages to ensure imperceptibility.
+    pipeline.addStage(std::make_unique<MaskingStage>(result.originalSamples, parser.getSampleRate(),
+                                                     parser.getNumChannels()));
 
     pipeline.run(result.processedSamples, parser.getNumChannels());
 
