@@ -27,4 +27,12 @@ class Commands {
      * @param startIdx  argv index of the first option after the input path.
      */
     static int handleFft(const std::string &inputPath, int argc, char **argv, int startIdx);
+
+    /**
+     * @brief Handle the `bark` command — display Bark band mapping for WAV bins.
+     * Shows which psychoacoustic Bark band each FFT bin falls into.
+     *
+     * Syntax: dissonance.core bark <input.wav> [--frame-size 2048]
+     */
+    static int handleBark(const std::string &inputPath, int argc, char **argv, int startIdx);
 };

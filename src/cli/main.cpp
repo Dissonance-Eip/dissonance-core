@@ -6,6 +6,7 @@
  *   info      — print WAV metadata and waveform
  *   process   — apply gain and spectral filtering
  *   fft       — display FFT spectrum analysis
+ *   bark      — show Bark-scale band mapping
  */
 
 #include <iostream>
@@ -33,6 +34,10 @@ int main(int argc, char **argv) {
 
         if (command == "fft") {
             return Commands::handleFft(inputPath, argc, argv, 3);
+        }
+
+        if (command == "bark") {
+            return Commands::handleBark(inputPath, argc, argv, 3);
         }
 
         std::cerr << "Unknown command: " << command << "\n";
