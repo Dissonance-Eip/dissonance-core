@@ -26,9 +26,9 @@
 #include "audio/WindowFunctions.hpp"
 
 MaskingStage::MaskingStage(const std::vector<float> &cleanSamples, uint32_t sampleRate,
-                           uint16_t numChannels, size_t frameSize)
+                           uint16_t numChannels, float maskingStrength, size_t frameSize)
     : cleanSamples_(cleanSamples), sampleRate_(sampleRate), numChannels_(numChannels),
-      frameSize_(frameSize), hopSize_(frameSize / 2) {}
+      frameSize_(frameSize), hopSize_(frameSize / 2), maskingStrength_(maskingStrength) {}
 
 void MaskingStage::process(std::vector<float> &samples, uint16_t numChannels) {
     if (numChannels == 0 || samples.empty() || numChannels != numChannels_)
@@ -86,8 +86,14 @@ void MaskingStage::process(std::vector<float> &samples, uint16_t numChannels) {
             }
 
             // ── Compute masking thresholds from clean magnitude ──
-            const std::vector<float> thresholds =
+            std::vector<float> thresholds =
                 PsychoacousticModel::computeThresholds(cleanMag, sampleRate_, frameSize_);
+
+            // ── Scale thresholds by masking strength ──
+            if (maskingStrength_ < 1.0f) {
+                for (auto &t : thresholds)
+                    t *= maskingStrength_;
+            }
 
             // ── Clamp per-bin perturbation to threshold ──
             std::vector<std::complex<float>> clampedSpectrum = pertSpectrum;

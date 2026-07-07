@@ -2,9 +2,8 @@
  * @file PsychoacousticModel.cpp
  * @brief Psychoacoustic masking threshold computation.
  *
- * Implements Bark-scale band mapping, triangular spreading function,
- * absolute threshold of hearing (Terhardt 1979), and per-bin masking
- * threshold computation.
+ * Implements Bark-scale band mapping, triangular spreading function, and
+ * per-bin masking threshold computation.
  */
 
 #include "audio/PsychoacousticModel.hpp"
@@ -78,11 +77,16 @@ size_t PsychoacousticModel::binToBarkBand(size_t binIndex, uint32_t sampleRate, 
 float PsychoacousticModel::spreadingAttenuation(float maskerBark, float targetBark) {
     const float dz = targetBark - maskerBark;
     if (dz >= 0.0f) {
-        // Upward spread (target higher frequency than masker): +25 dB/Bark
-        return 25.0f * dz;
+        // Upward spread (target higher frequency than masker): the "upward
+        // spread of masking" phenomenon — a masker suppresses content above
+        // its own frequency more effectively than below it, so this slope
+        // must be the gentler one (~10 dB/Bark) for loud low/mid content to
+        // actually mask noise sitting above it in frequency.
+        return 10.0f * dz;
     } else {
-        // Downward spread (target lower frequency than masker): -10 dB/Bark
-        return -10.0f * dz; // dz negative → positive attenuation
+        // Downward spread (target lower frequency than masker): falls off
+        // faster below the masker — steeper slope, ~25 dB/Bark.
+        return -25.0f * dz; // dz negative → positive attenuation
     }
 }
 
@@ -113,18 +117,6 @@ std::vector<float> PsychoacousticModel::applySpreading(const std::vector<float> 
 }
 
 // ============================================================================
-// Absolute threshold of hearing
-// ============================================================================
-
-float PsychoacousticModel::absoluteThresholdDb(float hz) {
-    // Terhardt (1979) absolute threshold of hearing
-    // Valid from ~20 Hz to ~20 kHz
-    const float f = hz / 1000.0f; // normalize to kHz
-    return 3.64f * std::pow(f, -0.8f) - 6.5f * std::exp(-0.6f * std::pow(f - 3.3f, 2.0f)) +
-           1.0e-3f * std::pow(f, 4.0f);
-}
-
-// ============================================================================
 // Compute per-bin masking thresholds
 // ============================================================================
 
@@ -135,29 +127,51 @@ std::vector<float> PsychoacousticModel::computeThresholds(const std::vector<floa
 
     const size_t halfBins = frameSize / 2;
 
-    // ── Step 1: Accumulate energy per Bark band ──
+    // ── Step 1: Accumulate average per-bin energy per Bark band ──
+    // Bark bands vary hugely in width — 5 bins in the lowest band vs. ~500
+    // bins in the top band at a 2048-sample frame. Summing raw energy across
+    // a band and reusing that sum as the per-bin threshold (Step 4) scales
+    // the allowance with bin count: a wide band ends up with a threshold
+    // ~sqrt(binCount) times larger than any individual bin's real magnitude
+    // justifies, letting far more noise through per-bin in wide bands. This
+    // is most visible with high-frequency noise (e.g. white_noise's 8 kHz
+    // high-pass), which lands almost entirely in the widest top bands.
+    // Averaging keeps the threshold representative of a single bin.
     std::vector<float> bandLinearEnergy(kNumBarkBands, 0.0f);
+    std::vector<size_t> bandBinCount(kNumBarkBands, 0);
     for (size_t i = 0; i <= halfBins; ++i) {
         const size_t band = binToBarkBand(i, sampleRate, frameSize);
         const float energy = magnitude[i] * magnitude[i];
         bandLinearEnergy[band] += energy;
+        ++bandBinCount[band];
     }
 
-    // Convert to dB
+    // Convert average per-bin energy to dB
     std::vector<float> bandEnergyDb(kNumBarkBands);
     for (size_t b = 0; b < kNumBarkBands; ++b) {
-        const float e = std::max(bandLinearEnergy[b], kEps);
+        const float avgEnergy =
+            bandBinCount[b] > 0 ? bandLinearEnergy[b] / static_cast<float>(bandBinCount[b]) : 0.0f;
+        const float e = std::max(avgEnergy, kEps);
         bandEnergyDb[b] = 10.0f * std::log10(e);
     }
 
     // ── Step 2: Apply spreading function ──
     std::vector<float> spreadMaskDb = applySpreading(bandEnergyDb);
 
-    // ── Step 3: Combine with absolute threshold of hearing ──
+    // ── Step 3: Apply minimum threshold floor ──
+    // ATH is intentionally not used as an absolute comparison here.
+    // The ATH values are in dB SPL but our signal energies are in an
+    // uncalibrated dB scale from raw FFT magnitudes — comparing them
+    // directly lets the ATH override the spreading function in quiet
+    // bands, letting noise through (the bug you can hear).
+    //
+    // For perturbation clamping, the spreading function alone provides
+    // correct behavior: bands near the signal have high thresholds (noise
+    // is masked), bands far from the signal have low thresholds (noise is
+    // clamped). A conservative floor prevents numerical issues.
+    constexpr float kMinThresholdDb = -80.0f;
     for (size_t b = 0; b < kNumBarkBands; ++b) {
-        const float centerHz = barkBandCenters()[b];
-        const float absDb = absoluteThresholdDb(centerHz);
-        spreadMaskDb[b] = std::max(spreadMaskDb[b], absDb);
+        spreadMaskDb[b] = std::max(spreadMaskDb[b], kMinThresholdDb);
     }
 
     // ── Step 4: Map per-band thresholds back to per-bin linear magnitude ──

@@ -36,6 +36,8 @@ void Commands::printUsage(const char *programName) {
               << "\nOptions for 'process':\n"
               << "  --gain <value>          Apply gain (default: 0.8)\n"
               << "  --perturbation <0..1>   Per-mode noise strength (default: 0.5)\n"
+              << "  --masking-strength <0..1> Masking threshold scale, lower = more clamping "
+                 "(default: 1.0)\n"
               << "  --mode <name>           Perturbation mode (";
     bool first = true;
     const std::vector<std::string> knownModes = {"white_noise", "phase_distortion", "spectral_gate",
@@ -81,6 +83,8 @@ int Commands::handleProcess(const std::string &inputPath, int argc, char **argv,
             opts.perturbationModes.push_back(argv[++i]);
         } else if (std::string(argv[i]) == "--output" && i + 1 < argc) {
             opts.outputPath = argv[++i];
+        } else if (std::string(argv[i]) == "--masking-strength" && i + 1 < argc) {
+            opts.maskingStrength = static_cast<float>(std::stod(argv[++i]));
         }
     }
 

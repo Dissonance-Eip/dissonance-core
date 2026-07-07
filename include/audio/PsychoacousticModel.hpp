@@ -7,8 +7,8 @@
 /**
  * @brief Psychoacoustic model for computing per-bin masking thresholds.
  *
- * Maps FFT bins to 24 Bark critical bands, applies a triangular spreading
- * function, and incorporates the absolute threshold of hearing (Terhardt 1979).
+ * Maps FFT bins to 24 Bark critical bands and applies a triangular spreading
+ * function.
  *
  * The main entry point is computeThresholds(), which takes a magnitude spectrum
  * and returns per-bin linear masking thresholds suitable for clamping
@@ -24,9 +24,8 @@ class PsychoacousticModel {
     /**
      * @brief Compute per-bin masking thresholds for a single FFT frame.
      *
-     * Accumulates energy per Bark band, applies triangular spreading,
-     * incorporates absolute threshold of hearing, and maps back to per-bin
-     * linear magnitude thresholds.
+     * Accumulates energy per Bark band, applies triangular spreading, floors
+     * the result, and maps back to per-bin linear magnitude thresholds.
      *
      * @param magnitude  Magnitude spectrum (full frameSize bins, linear scale).
      *                   Must have length == frameSize.
@@ -58,21 +57,16 @@ class PsychoacousticModel {
     /**
      * @brief Spreading function attenuation between two Bark values.
      *
-     * Triangular approximation: +25 dB/Bark upward, -10 dB/Bark downward.
+     * Triangular approximation of the "upward spread of masking": a masker
+     * suppresses content above its own frequency more effectively than
+     * below it, so the upward slope (~10 dB/Bark) is gentler than the
+     * downward slope (~25 dB/Bark).
      *
      * @param maskerBark Bark value of the masker (source) band.
      * @param targetBark Bark value of the target band.
      * @return Attenuation in dB (always >= 0).
      */
     static float spreadingAttenuation(float maskerBark, float targetBark);
-
-    /**
-     * @brief Absolute threshold of hearing in dB SPL for a given frequency.
-     *
-     * Terhardt (1979) formula:
-     *   T(f) = 3.64*(f/1k)^(-0.8) - 6.5*exp(-0.6*(f/1k-3.3)^2) + 1e-3*(f/1k)^4
-     */
-    static float absoluteThresholdDb(float hz);
 
   private:
     /**
