@@ -91,8 +91,8 @@ void MaskingStage::process(std::vector<float> &samples, uint16_t numChannels) {
 
             // ── Scale thresholds by masking strength ──
             if (maskingStrength_ < 1.0f) {
-                for (auto &t : thresholds)
-                    t *= maskingStrength_;
+                std::transform(thresholds.begin(), thresholds.end(), thresholds.begin(),
+                               [this](float t) { return t * maskingStrength_; });
             }
 
             // ── Clamp per-bin perturbation to threshold ──
