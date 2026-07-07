@@ -73,17 +73,17 @@ TEST(PsychoacousticModelTest, BinToBarkBand_HighFreq) {
 // ---------------------------------------------------------------------------
 
 TEST(PsychoacousticModelTest, SpreadingAttenuation_Downward) {
-    // Target below masker → -10 dB/Bark: attenuation should be positive
-    // masker at 5 Bark, target at 3 Bark → dz = -2 → atten = -10 * (-2) = 20
+    // Target below masker → -25 dB/Bark: attenuation should be positive
+    // masker at 5 Bark, target at 3 Bark → dz = -2 → atten = -25 * (-2) = 50
     float atten = PsychoacousticModel::spreadingAttenuation(5.0f, 3.0f);
-    EXPECT_FLOAT_EQ(atten, 20.0f);
+    EXPECT_FLOAT_EQ(atten, 50.0f);
 }
 
 TEST(PsychoacousticModelTest, SpreadingAttenuation_Upward) {
-    // Target above masker → +25 dB/Bark
-    // masker at 3 Bark, target at 5 Bark → dz = 2 → atten = 25 * 2 = 50
+    // Target above masker → +10 dB/Bark (upward spread of masking is gentler)
+    // masker at 3 Bark, target at 5 Bark → dz = 2 → atten = 10 * 2 = 20
     float atten = PsychoacousticModel::spreadingAttenuation(3.0f, 5.0f);
-    EXPECT_FLOAT_EQ(atten, 50.0f);
+    EXPECT_FLOAT_EQ(atten, 20.0f);
 }
 
 TEST(PsychoacousticModelTest, SpreadingAttenuation_SameBand) {
@@ -94,38 +94,10 @@ TEST(PsychoacousticModelTest, SpreadingAttenuation_SameBand) {
 
 TEST(PsychoacousticModelTest, SpreadingAttenuation_Symmetric) {
     // Attenuation should be direction-dependent (not symmetric)
-    float up = PsychoacousticModel::spreadingAttenuation(3.0f, 5.0f);   // +25 * 2
-    float down = PsychoacousticModel::spreadingAttenuation(5.0f, 3.0f); // -10 * -2
+    float up = PsychoacousticModel::spreadingAttenuation(3.0f, 5.0f);   // +10 * 2
+    float down = PsychoacousticModel::spreadingAttenuation(5.0f, 3.0f); // -25 * -2
     EXPECT_NE(up, down);
-    EXPECT_GT(up, down); // upward spread attenuates more
-}
-
-// ---------------------------------------------------------------------------
-// Absolute threshold of hearing
-// ---------------------------------------------------------------------------
-
-TEST(PsychoacousticModelTest, AbsoluteThresholdDb_KnownValues) {
-    // At 1 kHz, threshold should be around 0 dB (normalized reference)
-    float thresh1k = PsychoacousticModel::absoluteThresholdDb(1000.0f);
-    EXPECT_NEAR(thresh1k, 0.0f, 5.0f);
-
-    // At 4 kHz, threshold dips (ear most sensitive ~2-5 kHz)
-    float thresh4k = PsychoacousticModel::absoluteThresholdDb(4000.0f);
-    EXPECT_LT(thresh4k, thresh1k); // more sensitive (lower threshold)
-
-    // At 100 Hz, threshold should be higher (less sensitive at low frequencies)
-    float thresh100 = PsychoacousticModel::absoluteThresholdDb(100.0f);
-    EXPECT_GT(thresh100, thresh1k); // less sensitive
-}
-
-TEST(PsychoacousticModelTest, AbsoluteThresholdDb_NonNegativeAtExtremes) {
-    // Very low frequencies should not produce NaN or negative infinity
-    float thresh20 = PsychoacousticModel::absoluteThresholdDb(20.0f);
-    EXPECT_TRUE(std::isfinite(thresh20));
-
-    // Very high frequencies should be finite
-    float thresh20k = PsychoacousticModel::absoluteThresholdDb(20000.0f);
-    EXPECT_TRUE(std::isfinite(thresh20k));
+    EXPECT_GT(down, up); // downward spread attenuates more (upward spread of masking)
 }
 
 // ---------------------------------------------------------------------------
@@ -150,7 +122,7 @@ TEST(PsychoacousticModelTest, ComputeThresholds_AllZero) {
     std::vector<float> mag(frameSize, 0.0f);
     auto thresholds = PsychoacousticModel::computeThresholds(mag, 44100, frameSize);
     EXPECT_EQ(thresholds.size(), frameSize);
-    // With zero input, thresholds should revert to absolute threshold of hearing
+    // With zero input, thresholds should revert to the minimum floor.
     // All entries should be finite and non-negative
     for (size_t i = 0; i < thresholds.size(); ++i) {
         EXPECT_TRUE(std::isfinite(thresholds[i]));
@@ -178,6 +150,34 @@ TEST(PsychoacousticModelTest, ComputeThresholds_PureTone) {
             maxThresh = t;
     }
     EXPECT_GT(maxThresh, 0.01f);
+}
+
+TEST(PsychoacousticModelTest, ComputeThresholds_WideBandNotOverAllocated) {
+    // Regression test: the top Bark band spans ~500 bins at frameSize=2048,
+    // vs. ~5 for the lowest bands. Before normalizing by bin count, summing
+    // raw energy across the whole band and reusing that sum as the per-bin
+    // threshold inflated the allowance by ~sqrt(binCount) — about 22x here —
+    // letting far more noise through per-bin than the signal justified.
+    constexpr size_t frameSize = 2048;
+    constexpr uint32_t sampleRate = 44100;
+    constexpr float kBinMag = 0.01f;
+
+    std::vector<float> mag(frameSize, 0.0f);
+    const size_t halfBins = frameSize / 2;
+    for (size_t i = 0; i <= halfBins; ++i) {
+        if (PsychoacousticModel::binToBarkBand(i, sampleRate, frameSize) ==
+            PsychoacousticModel::kNumBarkBands - 1) {
+            mag[i] = kBinMag;
+        }
+    }
+
+    auto thresholds = PsychoacousticModel::computeThresholds(mag, sampleRate, frameSize);
+    EXPECT_EQ(thresholds.size(), frameSize);
+
+    // The per-bin threshold should stay on the order of the actual per-bin
+    // magnitude present, not blow up because the band spans hundreds of bins.
+    const float threshInBand = thresholds[halfBins];
+    EXPECT_LT(threshInBand, kBinMag * 5.0f);
 }
 
 } // namespace

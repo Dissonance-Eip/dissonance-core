@@ -57,6 +57,7 @@ class ProcessWorker : public Napi::AsyncWorker {
 // process(inputPath: string, options?: {
 //   outputPath?: string,
 //   perturbation?: number,
+//   maskingStrength?: number,
 //   modes?: string[]
 // })
 //   inputPath              – WAV file to process (required)
@@ -86,6 +87,11 @@ Napi::Value Process(const Napi::CallbackInfo &info) {
             Napi::Value v = jsOpts.Get("perturbation");
             if (v.IsNumber())
                 opts.perturbation = static_cast<float>(v.As<Napi::Number>().DoubleValue());
+        }
+        if (jsOpts.Has("maskingStrength")) {
+            Napi::Value v = jsOpts.Get("maskingStrength");
+            if (v.IsNumber())
+                opts.maskingStrength = static_cast<float>(v.As<Napi::Number>().DoubleValue());
         }
         if (jsOpts.Has("modes") && jsOpts.Get("modes").IsArray()) {
             Napi::Array modes = jsOpts.Get("modes").As<Napi::Array>();

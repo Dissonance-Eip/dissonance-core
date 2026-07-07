@@ -21,9 +21,10 @@ struct ProcessingOptions {
     double gain = 0.8;         ///< Linear amplitude gain applied after FFT filtering.
     float perturbation = 0.5f; ///< Per-mode noise strength multiplier in [0, 1].
     std::vector<std::string>
-        perturbationModes;  ///< Modes to apply, e.g. {"white_noise","phase_distortion"}. Empty = no
-                            ///< perturbation.
-    std::string outputPath; ///< Output file path. Auto-generated if empty.
+        perturbationModes; ///< Modes to apply, e.g. {"white_noise","phase_distortion"}. Empty = no
+                           ///< perturbation.
+    float maskingStrength = 1.0f; ///< Masking threshold scale. 1 = psychoacoustic, 0 = clamp all.
+    std::string outputPath;       ///< Output file path. Auto-generated if empty.
     std::function<void(float)> progressCallback; ///< Optional progress callback in [0, 1].
 };
 

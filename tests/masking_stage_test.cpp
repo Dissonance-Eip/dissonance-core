@@ -55,7 +55,7 @@ TEST(MaskingStageTest, CleanSignalPassesThrough) {
     std::vector<float> clean = makeSine(numSamples, 440.0f, sampleRate, 0.5f);
     std::vector<float> perturbed = clean; // no perturbation
 
-    MaskingStage stage(clean, sampleRate, numChannels);
+    MaskingStage stage(clean, sampleRate, numChannels, 1.0f);
     stage.process(perturbed, numChannels);
 
     // Output RMS should be close to input RMS
@@ -98,7 +98,7 @@ TEST(MaskingStageTest, PerturbationIsReduced) {
     float noiseRms = static_cast<float>(std::sqrt(noiseSumSq / static_cast<double>(numSamples)));
 
     // Apply masking
-    MaskingStage stage(clean, sampleRate, numChannels);
+    MaskingStage stage(clean, sampleRate, numChannels, 1.0f);
     std::vector<float> masked = noisy;
     stage.process(masked, numChannels);
 
@@ -137,7 +137,7 @@ TEST(MaskingStageTest, StereoProcessing) {
     std::vector<float> perturbed = clean;
     addNoise(perturbed, 0.03f, 99);
 
-    MaskingStage stage(clean, sampleRate, numChannels);
+    MaskingStage stage(clean, sampleRate, numChannels, 1.0f);
     stage.process(perturbed, numChannels);
 
     // Output should be finite and within [-1, 1]
@@ -157,7 +157,7 @@ TEST(MaskingStageTest, EmptyBufferNoCrash) {
     std::vector<float> clean;
     std::vector<float> perturbed;
 
-    MaskingStage stage(clean, 44100, 1);
+    MaskingStage stage(clean, 44100, 1, 1.0f);
     EXPECT_NO_THROW(stage.process(perturbed, 1));
     EXPECT_EQ(stage.framesProcessed(), 0u);
 }
@@ -170,7 +170,7 @@ TEST(MaskingStageTest, ShortBufferNoCrash) {
     std::vector<float> clean(100, 0.0f);
     std::vector<float> perturbed(100, 0.1f);
 
-    MaskingStage stage(clean, 44100, 1);
+    MaskingStage stage(clean, 44100, 1, 1.0f);
     EXPECT_NO_THROW(stage.process(perturbed, 1));
     EXPECT_EQ(stage.framesProcessed(), 0u);
 }
@@ -188,7 +188,7 @@ TEST(MaskingStageTest, OutputClamped) {
     std::vector<float> perturbed = clean;
     addNoise(perturbed, 0.5f, 7);
 
-    MaskingStage stage(clean, 44100, 1);
+    MaskingStage stage(clean, 44100, 1, 1.0f);
     stage.process(perturbed, 1);
 
     for (float s : perturbed) {
@@ -210,7 +210,7 @@ TEST(MaskingStageTest, DifferentSampleRate) {
     std::vector<float> perturbed = clean;
     addNoise(perturbed, 0.02f, 42);
 
-    MaskingStage stage(clean, 22050, 1);
+    MaskingStage stage(clean, 22050, 1, 1.0f);
     EXPECT_NO_THROW(stage.process(perturbed, 1));
     EXPECT_GT(stage.framesProcessed(), 0u);
 }
