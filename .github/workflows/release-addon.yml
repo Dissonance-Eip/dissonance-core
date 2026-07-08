@@ -51,18 +51,16 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         needs: addon-checks
         runs-on: ${{ matrix.runner }}
-        # TEMPORARY: windows-latest's node-gyp can't detect the Visual Studio
-        # install on that runner image (unrecognized VS version), unrelated to
-        # this project's code. Don't let that block the release job (which
-        # needs every build-addon leg to succeed) — treat Windows as
-        # best-effort until the runner/node-gyp mismatch is fixed properly.
-        continue-on-error: ${{ matrix.os == 'windows' }}
         strategy:
             fail-fast: false
             matrix:
                 include:
+                    # Pinned to windows-2022 (VS 2022 / v17). windows-latest
+                    # migrated to windows-2025 (VS 18), which node-gyp 10.x
+                    # can't detect — its PowerShell VS probe both fails to
+                    # recognize the version and overflows its stdio buffer.
                     - os: windows
-                      runner: windows-latest
+                      runner: windows-2022
                       arch: x64
                     - os: linux
                       runner: ubuntu-latest
