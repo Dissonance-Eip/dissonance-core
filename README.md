@@ -11,7 +11,7 @@ The `.node` addon exposes three async functions:
 ```js
 process(
   inputPath: string,
-  options?: { outputPath?: string, perturbation?: number }
+  options?: { outputPath?: string, perturbation?: number, modes?: string[] }
 ): Promise<{ ok: boolean, processedPath: string }>
 
 readMetadata(filePath: string): Promise<{
@@ -30,13 +30,19 @@ writeTags(filePath: string, tags: {
 
 ### `process`
 
-Runs the full pipeline: `GainStage → WindowedFFTStage → PerturbationStage`.
+Runs the full pipeline: `GainStage → WindowedFFTStage → PerturbationStage(s) → MaskingStage`.
+One `PerturbationStage` is added per requested mode (they stack in order), and the
+`MaskingStage` clamps the injected noise under psychoacoustic (Bark-band) masking
+thresholds so it stays below the threshold of hearing.
 
 - `options.outputPath` — if omitted, falls back to `<inputDir>/<stem>-processed.wav`
   (used by the CLI and tests; the UI always passes a temp path).
-- `options.perturbation` — `[0, 1]`, defaults to `ProcessingOptions::perturbation`
-  if omitted. The UI surfaces this as a slider; the CLI surfaces it as
-  `--perturbation`.
+- `options.perturbation` — `[0, 1]` per-mode noise strength, defaults to
+  `ProcessingOptions::perturbation` if omitted.
+- `options.modes` — perturbation strategies to stack, e.g.
+  `["white_noise", "phase_distortion"]`. Valid modes: `white_noise`,
+  `phase_distortion`, `spectral_gate`, `pink_noise`. When empty, falls back to a
+  single `white_noise` stage if `perturbation > 0`.
 
 ### `readMetadata`
 
