@@ -16,9 +16,9 @@ constexpr float kPinkNoiseSources = 16;
 }
 
 PerturbationStage::PerturbationStage(const std::string &mode, float strength, uint32_t sampleRate,
-                                     uint64_t seed)
+                                     uint64_t seed, MaskContext *context)
     : mode_(mode), strength_(std::clamp(strength, 0.0f, 1.0f)), sampleRate_(sampleRate),
-      seed_(seed) {}
+      seed_(seed), context_(context) {}
 
 void PerturbationStage::process(std::vector<float> &samples, uint16_t numChannels) {
     if (strength_ <= 0.0f || samples.empty() || numChannels == 0)

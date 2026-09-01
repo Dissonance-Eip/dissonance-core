@@ -15,6 +15,7 @@
         "src/audio/FFTProcessor.cpp",
         "src/audio/PsychoacousticModel.cpp",
         "src/audio/MaskingStage.cpp",
+        "src/audio/MaskingThresholdStage.cpp",
         "vendor/kissfft/kiss_fft.c"
       ],
       "include_dirs": [
