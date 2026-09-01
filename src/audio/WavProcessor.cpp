@@ -142,10 +142,12 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
     }
 
     // MaskingStage: clamps spectral perturbation under psychoacoustic thresholds.
-    // Runs after all perturbation stages to ensure imperceptibility.
+    // Runs after all perturbation stages to ensure imperceptibility. It now reads
+    // its per-frame thresholds from the shared MaskContext (computed once upstream
+    // by MaskingThresholdStage) instead of recomputing them, preserving output.
     pipeline.addStage(std::make_unique<MaskingStage>(result.originalSamples, parser.getSampleRate(),
-                                                     parser.getNumChannels(),
-                                                     opts.maskingStrength));
+                                                     parser.getNumChannels(), opts.maskingStrength,
+                                                     2048, &maskContext));
 
     pipeline.run(result.processedSamples, parser.getNumChannels());
 
