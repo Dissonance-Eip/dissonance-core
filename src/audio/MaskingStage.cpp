@@ -26,9 +26,11 @@
 #include "audio/WindowFunctions.hpp"
 
 MaskingStage::MaskingStage(const std::vector<float> &cleanSamples, uint32_t sampleRate,
-                           uint16_t numChannels, float maskingStrength, size_t frameSize)
+                           uint16_t numChannels, float maskingStrength, size_t frameSize,
+                           MaskContext *context)
     : cleanSamples_(cleanSamples), sampleRate_(sampleRate), numChannels_(numChannels),
-      frameSize_(frameSize), hopSize_(frameSize / 2), maskingStrength_(maskingStrength) {}
+      frameSize_(frameSize), hopSize_(frameSize / 2), maskingStrength_(maskingStrength),
+      context_(context) {}
 
 void MaskingStage::process(std::vector<float> &samples, uint16_t numChannels) {
     if (numChannels == 0 || samples.empty() || numChannels != numChannels_)
@@ -49,8 +51,18 @@ void MaskingStage::process(std::vector<float> &samples, uint16_t numChannels) {
 
     framesProcessed_ = 0;
 
+    // Decide at most once whether to read per-frame thresholds from the shared
+    // MaskContext. The shared masks are only used if they were computed for this
+    // same number of channels and carry threshold vectors of this frame size.
+    // NOTE: This is the NEW behaviour (issue #87 wiring): when a compatible shared
+    // mask is available, MaskingStage consumes it instead of recomputing thresholds.
+    // The legacy per-frame recompute path is kept below but is NOT the active path
+    // when a valid shared mask is present.
+    const bool useSharedMask =
+        context_ != nullptr && context_->numChannels == numChannels_ && context_->hasMasks();
+
     // Process each channel independently
-    for (uint16_t ch = 0; ch < numChannels; ++ch) {
+    for (uint16_t ch = 0; ch < numChannels_; ++ch) {
         std::vector<float> output(totalFrames, 0.0f);
 
         for (size_t offset = 0; offset + frameSize_ <= totalFrames;
@@ -85,14 +97,34 @@ void MaskingStage::process(std::vector<float> &samples, uint16_t numChannels) {
                 pertPhase[i] = std::arg(pertSpectrum[i]);
             }
 
-            // ── Compute masking thresholds from clean magnitude ──
-            std::vector<float> thresholds =
-                PsychoacousticModel::computeThresholds(cleanMag, sampleRate_, frameSize_);
+            // ── Obtain per-frame masking thresholds ──
+            // NEW path: read from the shared MaskContext (already scaled by
+            // maskingStrength). The frame index within the channel is offset/hop.
+            // Fall back to legacy recompute if the shared mask is unavailable or
+            // does not match this frame geometry.
+            const size_t maskFrameIndex = offset / hopSize_;
+            std::vector<float> thresholds;
+            if (useSharedMask) {
+                const std::vector<float> &shared =
+                    context_->maskForChannelFrame(ch, maskFrameIndex);
+                if (shared.size() == frameSize_) {
+                    thresholds = shared;
+                }
+            }
+            if (thresholds.empty()) {
+                // ── LEGACY (not the active path when a shared mask is present) ──
+                // Recompute the thresholds from the clean magnitude each frame.
+                // NOTE: this code is intentionally retained for reference/fallback
+                // and is NOT what runs when MaskingStage is fed from the shared
+                // MaskContext (see useSharedMask above).
+                thresholds =
+                    PsychoacousticModel::computeThresholds(cleanMag, sampleRate_, frameSize_);
 
-            // ── Scale thresholds by masking strength ──
-            if (maskingStrength_ < 1.0f) {
-                std::transform(thresholds.begin(), thresholds.end(), thresholds.begin(),
-                               [this](float t) { return t * maskingStrength_; });
+                // ── Scale thresholds by masking strength ──
+                if (maskingStrength_ < 1.0f) {
+                    std::transform(thresholds.begin(), thresholds.end(), thresholds.begin(),
+                                   [this](float t) { return t * maskingStrength_; });
+                }
             }
 
             // ── Clamp per-bin perturbation to threshold ──

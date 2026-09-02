@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "audio/AudioStage.hpp"
+#include "audio/MaskingThresholdStage.hpp"
 
 /**
  * @brief AudioStage that injects adversarial noise using one of several
@@ -30,9 +31,11 @@ class PerturbationStage : public AudioStage {
      * @param strength    Noise level multiplier in [0, 1].
      * @param sampleRate  Sample rate of the input audio in Hz.
      * @param seed        RNG seed — derive from file characteristics for determinism.
+     * @param context     Optional shared MaskContext precomputed by MaskingThresholdStage.
+     *                    Reserved for mask-aware shaping (not yet consumed here). May be null.
      */
     PerturbationStage(const std::string &mode, float strength, uint32_t sampleRate,
-                      uint64_t seed = 0);
+                      uint64_t seed = 0, MaskContext *context = nullptr);
 
     void process(std::vector<float> &samples, uint16_t numChannels) override;
 
@@ -52,6 +55,7 @@ class PerturbationStage : public AudioStage {
     float strength_;
     uint32_t sampleRate_;
     uint64_t seed_;
+    MaskContext *context_;
     float rmsDbfs_ = kSilentDbfs;
 
     /** @brief Frame size for FFT-based modes. */

@@ -19,6 +19,7 @@
 
 #include "audio/GainStage.hpp"
 #include "audio/MaskingStage.hpp"
+#include "audio/MaskingThresholdStage.hpp"
 #include "audio/PerturbationStage.hpp"
 #include "audio/Pipeline.hpp"
 #include "audio/WindowedFFTStage.hpp"
@@ -118,23 +119,35 @@ ProcessedWav processWavFile(const std::string &inputPath, const ProcessingOption
     pipeline.addStage(std::make_unique<GainStage>(opts.gain));
     pipeline.addStage(std::move(fftOwned));
 
+    // MaskingThresholdStage: precomputes per-channel, per-frame psychoacoustic
+    // thresholds once, upstream of perturbation generation, and stores them in
+    // a shared MaskContext consumed by the perturbation stages. This stage is
+    // behavior-neutral (does not modify the samples).
+    MaskContext maskContext;
+    pipeline.addStage(std::make_unique<MaskingThresholdStage>(
+        result.originalSamples, parser.getSampleRate(), parser.getNumChannels(),
+        opts.maskingStrength, maskContext, 2048));
+
     // Create one PerturbationStage per requested mode, each with a unique seed offset.
     // Legacy path: when no modes are specified but perturbation > 0, fall back to white_noise.
+    // Each stage receives the shared MaskContext pointer for mask-aware shaping.
     std::vector<std::string> modes = opts.perturbationModes;
     if (modes.empty() && opts.perturbation > 0.0f)
         modes.push_back("white_noise");
 
     for (size_t i = 0; i < modes.size(); ++i) {
         const uint64_t modeSeed = baseSeed + static_cast<uint64_t>(i) * 0x9E3779B97F4A7C15ull;
-        pipeline.addStage(std::make_unique<PerturbationStage>(modes[i], opts.perturbation,
-                                                              parser.getSampleRate(), modeSeed));
+        pipeline.addStage(std::make_unique<PerturbationStage>(
+            modes[i], opts.perturbation, parser.getSampleRate(), modeSeed, &maskContext));
     }
 
     // MaskingStage: clamps spectral perturbation under psychoacoustic thresholds.
-    // Runs after all perturbation stages to ensure imperceptibility.
+    // Runs after all perturbation stages to ensure imperceptibility. It now reads
+    // its per-frame thresholds from the shared MaskContext (computed once upstream
+    // by MaskingThresholdStage) instead of recomputing them, preserving output.
     pipeline.addStage(std::make_unique<MaskingStage>(result.originalSamples, parser.getSampleRate(),
-                                                     parser.getNumChannels(),
-                                                     opts.maskingStrength));
+                                                     parser.getNumChannels(), opts.maskingStrength,
+                                                     2048, &maskContext));
 
     pipeline.run(result.processedSamples, parser.getNumChannels());
 

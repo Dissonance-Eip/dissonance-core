@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "audio/AudioStage.hpp"
+#include "audio/MaskingThresholdStage.hpp"
 
 /**
  * @brief AudioStage that clamps spectral perturbation under psychoacoustic
@@ -26,9 +27,15 @@ class MaskingStage : public AudioStage {
      * @param numChannels      Number of interleaved channels.
      * @param maskingStrength  Threshold scale factor. 1 = normal, 0 = clamp all.
      * @param frameSize        FFT frame size (default 2048).
+     * @param context          Optional shared MaskContext precomputed by
+     *                         MaskingThresholdStage. When present and matching
+     *                         this stage's frame geometry, the per-frame masks
+     *                         are read from it instead of being recomputed.
+     *                         The stored masks already include the masking
+     *                         strength scaling. May be null (legacy recompute).
      */
     MaskingStage(const std::vector<float> &cleanSamples, uint32_t sampleRate, uint16_t numChannels,
-                 float maskingStrength, size_t frameSize = 2048);
+                 float maskingStrength, size_t frameSize = 2048, MaskContext *context = nullptr);
 
     void process(std::vector<float> &samples, uint16_t numChannels) override;
 
@@ -45,5 +52,6 @@ class MaskingStage : public AudioStage {
     size_t frameSize_;
     size_t hopSize_;
     float maskingStrength_;
+    MaskContext *context_;
     size_t framesProcessed_ = 0;
 };

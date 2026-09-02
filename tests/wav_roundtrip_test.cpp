@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "core/Errors.hpp"
@@ -50,16 +51,30 @@ TEST(WavRoundtripTest, MonoFieldsMatch) {
     std::vector<int16_t> samples = {0, 16383, -16384, 32767, -32768};
     writeMinimalWav(path, 1, 44100, 16, samples);
 
-    std::ifstream f(path, std::ios::binary);
-    Parser p = Parser::fromFile(f);
+    uint16_t numChannels = 0;
+    uint32_t sampleRate = 0;
+    uint16_t bitsPerSample = 0;
+    uint16_t audioFormat = 0;
+    std::vector<float> audioData;
+    {
+        // Scope the stream so its handle is released before the file is removed.
+        std::ifstream f(path, std::ios::binary);
+        Parser p = Parser::fromFile(f);
+        numChannels = p.getNumChannels();
+        sampleRate = p.getSampleRate();
+        bitsPerSample = p.getBitsPerSample();
+        audioFormat = p.getAudioFormat();
+        audioData = p.getAudioData();
+    }
 
-    EXPECT_EQ(p.getNumChannels(), 1);
-    EXPECT_EQ(p.getSampleRate(), 44100u);
-    EXPECT_EQ(p.getBitsPerSample(), 16);
-    EXPECT_EQ(p.getAudioFormat(), 1);
-    ASSERT_EQ(p.getAudioData().size(), samples.size());
+    EXPECT_EQ(numChannels, 1);
+    EXPECT_EQ(sampleRate, 44100u);
+    EXPECT_EQ(bitsPerSample, 16);
+    EXPECT_EQ(audioFormat, 1);
+    ASSERT_EQ(audioData.size(), samples.size());
 
-    std::filesystem::remove(path);
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
 
 TEST(WavRoundtripTest, StereoSampleCountCorrect) {
@@ -68,14 +83,23 @@ TEST(WavRoundtripTest, StereoSampleCountCorrect) {
     std::vector<int16_t> samples = {100, -100, 200, -200, 300, -300, 400, -400};
     writeMinimalWav(path, 2, 48000, 16, samples);
 
-    std::ifstream f(path, std::ios::binary);
-    Parser p = Parser::fromFile(f);
+    uint16_t numChannels = 0;
+    uint32_t sampleRate = 0;
+    std::vector<float> audioData;
+    {
+        std::ifstream f(path, std::ios::binary);
+        Parser p = Parser::fromFile(f);
+        numChannels = p.getNumChannels();
+        sampleRate = p.getSampleRate();
+        audioData = p.getAudioData();
+    }
 
-    EXPECT_EQ(p.getNumChannels(), 2);
-    EXPECT_EQ(p.getSampleRate(), 48000u);
-    ASSERT_EQ(p.getAudioData().size(), samples.size());
+    EXPECT_EQ(numChannels, 2);
+    EXPECT_EQ(sampleRate, 48000u);
+    ASSERT_EQ(audioData.size(), samples.size());
 
-    std::filesystem::remove(path);
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
 
 TEST(WavRoundtripTest, FloatNormalisationInRange) {
@@ -83,15 +107,20 @@ TEST(WavRoundtripTest, FloatNormalisationInRange) {
     std::vector<int16_t> samples = {32767, -32768, 0};
     writeMinimalWav(path, 1, 44100, 16, samples);
 
-    std::ifstream f(path, std::ios::binary);
-    Parser p = Parser::fromFile(f);
+    std::vector<float> audioData;
+    {
+        std::ifstream f(path, std::ios::binary);
+        Parser p = Parser::fromFile(f);
+        audioData = p.getAudioData();
+    }
 
-    for (float v : p.getAudioData()) {
+    for (float v : audioData) {
         EXPECT_GE(v, -1.0f);
         EXPECT_LE(v, 1.0f);
     }
 
-    std::filesystem::remove(path);
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
 
 TEST(WavRoundtripTest, TruncatedFileThrows) {
@@ -100,9 +129,12 @@ TEST(WavRoundtripTest, TruncatedFileThrows) {
         std::ofstream f(path, std::ios::binary | std::ios::trunc);
         f.write("RIFF", 4); // deliberately incomplete
     }
-    std::ifstream f(path, std::ios::binary);
-    EXPECT_THROW(Parser::fromFile(f), dissonance::WavFormatError);
-    std::filesystem::remove(path);
+    {
+        std::ifstream f(path, std::ios::binary);
+        EXPECT_THROW(Parser::fromFile(f), dissonance::WavFormatError);
+    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
 
 TEST(WavRoundtripTest, WrongMagicThrows) {
@@ -114,7 +146,10 @@ TEST(WavRoundtripTest, WrongMagicThrows) {
         f.write(reinterpret_cast<const char *>(&dummy), 4);
         f.write("WAVE", 4);
     }
-    std::ifstream f(path, std::ios::binary);
-    EXPECT_THROW(Parser::fromFile(f), dissonance::WavFormatError);
-    std::filesystem::remove(path);
+    {
+        std::ifstream f(path, std::ios::binary);
+        EXPECT_THROW(Parser::fromFile(f), dissonance::WavFormatError);
+    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
 }
